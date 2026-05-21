@@ -1,10 +1,12 @@
-<img src="bot.jpg" align="left" width="80" hspace="16" alt="Mac bot profile">
-
-# met-me
-
-> Un bot Telegram di supporto emotivo. Ascolto, empatia, niente giudizio.
-
-<br clear="left">
+<table width="100%">
+<tr>
+<td width="110"><img src="bot.jpg" width="110" alt="Mac bot profile"></td>
+<td>
+<h1>met-me</h1>
+<em>Un bot Telegram di supporto emotivo.</em>
+</td>
+</tr>
+</table>
 
 
 
