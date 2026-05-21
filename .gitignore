@@ -1,7 +1,27 @@
+# ---- RAG index (auto-built first run) ----
+rag/index/
+
+# ---- RAG / vector stores ----
+chroma/
+.chroma/
+faiss_index/
+vector_store/
+embeddings/
+*.faiss
+*.index
+
 # ---- Secrets / local config ----
 .env
 .env.*
 !.env.example
+
+# ---- Secrets extra ----
+*.pem
+*.key
+*.p12
+credentials*.json
+service_account*.json
+secrets/
 
 # ---- Local data ----
 *.db
@@ -11,6 +31,18 @@
 *.sqlite
 *.sqlite3
 bot.db
+
+# ---- Local data / cache ----
+data/
+tmp/
+temp/
+cache/
+media/
+
+# ---- Backups ----
+*.bak
+*.orig
+*.original.md   # caveman compress backups
 
 # ---- Python ----
 __pycache__/
@@ -95,3 +127,10 @@ $RECYCLE.BIN/
 .pytype/
 .dmypy.json
 dmypy.json
+
+# ---- Claude Code local ----
+.claude/settings.local.json
+
+# ---- Profiling ----
+*.prof
+prof/
