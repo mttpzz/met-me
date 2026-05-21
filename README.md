@@ -178,7 +178,14 @@ Tutta la personalità vive in [persona.yaml](persona.yaml):
 name: Mac
 short_description: Be you. You'll be fine.
 welcome: |
-  Hi, my name is Mac. You can talk to me.
+  Hi, my name is Mac 👋
+help_user:
+  - /start - welcome message
+  - /help - this list
+  - /reset - clear the conversation history
+help_admin:
+  - /model - show the active model
+  - /model claude|ollama - switch model
 prompt: |
   Ruolo: Agisci come un assistente di supporto emotivo...
 ```
@@ -222,3 +229,23 @@ met-me/
 - [llama-index](https://github.com/run-llama/llama_index) ≥ 0.14 + [chromadb](https://github.com/chroma-core/chroma) ≥ 1.5
 - [ddgs](https://pypi.org/project/ddgs/) per web search
 - SQLite (stdlib)
+
+---
+
+## 🎵 Liner notes
+
+Il progetto contiene dei riferimenti a tre artisti che con la loro musica hanno raccontato salute mentale, identità e vulnerabilità meglio di tanti manuali.
+
+- 💬 **Mac Miller** — il bot si chiama **Mac** e la sua `short_description` è *"Be you. You'll be fine."* Tributo a un artista che della fragilità e della cura di sé ha fatto un linguaggio.
+
+- 🎭 **Marracash** — il file [persona.yaml](persona.yaml) prende il nome dall'album *Persona* (2019). In quel disco ogni traccia è una parte del corpo o un frammento di identità. La stessa idea è ripresa qui: `persona.yaml` è l'insieme delle "parti" che compongono il bot.
+
+- 👋 **Eminem** — il messaggio di benvenuto del bot, *"Hi, my name is Mac 👋"*, è un occhiolino al singolo *My Name Is*. Anche l'immagine profilo del bot richiama la copertina del singolo: il cartellino "HI! MY NAME IS" con "Mac" al posto di "Slim Shady". Presentazione diretta, niente fronzoli.
+
+Grazie per la musica. 🙏
+
+---
+
+## 📄 Licenza
+
+[MIT](LICENSE) © 2026 Matteo Pozzi

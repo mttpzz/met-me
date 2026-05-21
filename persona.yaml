@@ -3,8 +3,7 @@ name: Mac
 short_description: Be you. You'll be fine.
 
 welcome: |
-  Hi, my name is Mac. You can talk to me.
-  Commands: /help, /reset
+  Hi, my name is Mac 👋
 
 help_user:
   - /start - welcome message
