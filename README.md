@@ -1,6 +1,6 @@
 <table width="100%">
 <tr>
-<td width="110"><img src="bot.jpg" width="110" alt="Mac bot profile" style="border-radius: 12px;"></td>
+<td width="110"><img src="bot.png" width="110" alt="Mac bot profile"></td>
 <td>
 <h1>met-me</h1>
 <em>Un bot Telegram di supporto emotivo.</em>
