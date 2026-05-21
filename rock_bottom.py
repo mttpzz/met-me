@@ -1,9 +1,11 @@
-"""Mood scoring: classify user mood on a 0..10 scale via the active LLM.
+"""Rock-bottom tracker: classify user emotional state on a 0..10 scale via the
+active LLM.
 
-The bot calls `MoodScorer.score()` after each user turn and persists the result
-through `Database.add_mood`. A separate routine in `bot.py` computes a rolling
-average over the last `MOOD_WINDOW` scores and triggers an admin alert when it
-drops below `MOOD_THRESHOLD`.
+The bot calls `RockBottomTracker.score()` after each user turn and persists the
+result through `Database.add_rock_bottom_score`. A separate routine in `bot.py`
+computes a rolling average over the last `ROCK_BOTTOM_WINDOW` scores and
+triggers an admin alert when it drops below `ROCK_BOTTOM_THRESHOLD` -- i.e. the
+user is approaching rock bottom.
 
 This module deliberately does not reuse `LLMProvider.complete()` because that
 path enables tool use and replays the full chat history, neither of which is
@@ -22,15 +24,16 @@ import ollama
 
 from config import Config
 
-log = logging.getLogger("mood")
+log = logging.getLogger("rock_bottom")
 
 # Italian scoring rubric -- persona.yaml expects Italian conversation, so the
 # scorer is briefed in the same language to stay aligned with user messages.
 _SCORING_SYSTEM = (
-    "Classifichi lo stato d'animo espresso in un messaggio utente "
-    "su una scala numerica da 0 a 10.\n"
-    "0 = grave sofferenza emotiva (disperazione, autolesionismo, "
-    "ideazione suicidaria).\n"
+    "Classifichi lo stato emotivo espresso in un messaggio utente "
+    "su una scala numerica da 0 a 10, dove 0 indica il \"rock bottom\" "
+    "(toccare il fondo).\n"
+    "0 = rock bottom: grave sofferenza emotiva, disperazione, "
+    "autolesionismo o ideazione suicidaria.\n"
     "3 = tristezza, ansia o frustrazione marcate.\n"
     "5 = neutro o ambiguo.\n"
     "7 = sereno, leggermente positivo.\n"
@@ -70,14 +73,17 @@ def _parse_score(raw: str) -> float | None:
         return None
 
 
-class MoodScorer:
+class RockBottomTracker:
     def __init__(self, cfg: Config) -> None:
         self._cfg = cfg
         self._claude = anthropic.AsyncAnthropic(api_key=cfg.anthropic_api_key)
         self._ollama = ollama.Client(host=cfg.ollama_host)
 
     async def score(self, model_name: str, user_msg: str) -> float | None:
-        """Return a 0..10 mood score for `user_msg`, or None on failure."""
+        """Return a 0..10 rock-bottom score for `user_msg`, or None on failure.
+
+        Lower score = closer to rock bottom.
+        """
         if not user_msg.strip():
             return None
         try:
@@ -86,7 +92,7 @@ class MoodScorer:
             else:
                 raw = await self._score_ollama(user_msg)
         except Exception:
-            log.exception("Mood scoring failed via %s", model_name)
+            log.exception("Rock-bottom scoring failed via %s", model_name)
             return None
         return _parse_score(raw)
 

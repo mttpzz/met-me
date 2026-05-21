@@ -4,9 +4,10 @@ Replaces the earlier in-memory chat history and JSON state file. All blocking
 sqlite3 calls are dispatched to a worker thread to keep the asyncio loop free.
 
 Tables:
-  users     - one row per Telegram user, refreshed on every message
-  messages  - full conversation log; history is reconstructed from this
-  settings  - key/value store (e.g. active_model)
+  users              - one row per Telegram user, refreshed on every message
+  messages           - full conversation log; history is reconstructed from this
+  rock_bottom_scores - per-message 0..10 score from the rock-bottom tracker
+  settings           - key/value store (e.g. active_model)
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id, id);
 
-CREATE TABLE IF NOT EXISTS mood_scores (
+CREATE TABLE IF NOT EXISTS rock_bottom_scores (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id    INTEGER NOT NULL,
     message_id INTEGER,
@@ -48,7 +49,7 @@ CREATE TABLE IF NOT EXISTS mood_scores (
     FOREIGN KEY (message_id) REFERENCES messages(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_mood_user ON mood_scores(user_id, id);
+CREATE INDEX IF NOT EXISTS idx_rock_bottom_user ON rock_bottom_scores(user_id, id);
 
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
@@ -203,36 +204,36 @@ class Database:
         return await self._run(self._get_history_sync, user_id, max_turns)
 
     def _clear_history_sync(self, user_id: int) -> int:
-        # mood_scores.message_id FKs into messages.id, so wipe the children first
-        # (no ON DELETE CASCADE on the existing schema). Reset is a fresh start:
-        # orphan mood entries would skew rolling averages, so drop them too.
-        self._execute("DELETE FROM mood_scores WHERE user_id = ?", (user_id,))
+        # rock_bottom_scores.message_id FKs into messages.id, so wipe the children
+        # first (no ON DELETE CASCADE on the existing schema). Reset is a fresh
+        # start: orphan score entries would skew rolling averages, so drop them too.
+        self._execute("DELETE FROM rock_bottom_scores WHERE user_id = ?", (user_id,))
         cur = self._execute("DELETE FROM messages WHERE user_id = ?", (user_id,))
         return cur.rowcount
 
     async def clear_history(self, user_id: int) -> int:
         return await self._run(self._clear_history_sync, user_id)
 
-    def _count_messages_sync(self) -> int:
-        return self._execute("SELECT COUNT(*) AS n FROM messages").fetchone()["n"]
+    # ---- Rock-bottom tracker -----------------------------------------------
 
-    async def count_messages(self) -> int:
-        return await self._run(self._count_messages_sync)
-
-    # ---- Mood ---------------------------------------------------------------
-
-    def _add_mood_sync(self, user_id: int, score: float, message_id: int | None) -> None:
+    def _add_rock_bottom_score_sync(
+        self, user_id: int, score: float, message_id: int | None
+    ) -> None:
         self._execute(
-            "INSERT INTO mood_scores (user_id, message_id, score) VALUES (?, ?, ?)",
+            "INSERT INTO rock_bottom_scores (user_id, message_id, score) VALUES (?, ?, ?)",
             (user_id, message_id, float(score)),
         )
 
-    async def add_mood(self, user_id: int, score: float, message_id: int | None = None) -> None:
-        await self._run(self._add_mood_sync, user_id, score, message_id)
+    async def add_rock_bottom_score(
+        self, user_id: int, score: float, message_id: int | None = None
+    ) -> None:
+        await self._run(self._add_rock_bottom_score_sync, user_id, score, message_id)
 
-    def _recent_mood_avg_sync(self, user_id: int, window: int) -> tuple[float | None, int]:
+    def _recent_rock_bottom_avg_sync(
+        self, user_id: int, window: int
+    ) -> tuple[float | None, int]:
         rows = self._execute(
-            "SELECT score FROM mood_scores WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+            "SELECT score FROM rock_bottom_scores WHERE user_id = ? ORDER BY id DESC LIMIT ?",
             (user_id, window),
         ).fetchall()
         if not rows:
@@ -240,10 +241,12 @@ class Database:
         scores = [r["score"] for r in rows]
         return (sum(scores) / len(scores), len(scores))
 
-    async def recent_mood_avg(self, user_id: int, window: int) -> tuple[float | None, int]:
-        """Return (avg, count) of the most recent `window` mood scores. avg is
-        None when no scores exist yet."""
-        return await self._run(self._recent_mood_avg_sync, user_id, window)
+    async def recent_rock_bottom_avg(
+        self, user_id: int, window: int
+    ) -> tuple[float | None, int]:
+        """Return (avg, count) of the most recent `window` rock-bottom scores.
+        avg is None when no scores exist yet."""
+        return await self._run(self._recent_rock_bottom_avg_sync, user_id, window)
 
     def _lowest_recent_user_msgs_sync(
         self, user_id: int, window: int, limit: int
@@ -256,7 +259,7 @@ class Database:
                 """
                 WITH recent AS (
                     SELECT id, message_id, score, created_at
-                    FROM mood_scores
+                    FROM rock_bottom_scores
                     WHERE user_id = ?
                     ORDER BY id DESC
                     LIMIT ?

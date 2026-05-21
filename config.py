@@ -56,11 +56,14 @@ class Config:
     rag_chunk_overlap: int
     rag_embed_num_ctx: int
 
-    mood_window: int       # rolling window of latest mood scores averaged for alerting
-    mood_threshold: float  # avg below this (on 0..10) triggers admin alert
-    mood_alert_low_msgs: int  # how many lowest-scoring user msgs attach to an alert
+    rock_bottom_window: int       # rolling window of latest scores averaged for alerting
+    rock_bottom_threshold: float  # avg below this (on 0..10) triggers admin alert
+    rock_bottom_alert_low_msgs: int  # how many lowest-scoring user msgs attach to an alert
 
-    valid_models: tuple[str, ...] = field(default=("claude", "ollama"))
+    valid_models: tuple[str, ...] = field(default_factory=lambda: VALID_MODELS)
+
+
+VALID_MODELS: tuple[str, ...] = ("claude", "ollama")
 
 
 def _load_persona(path: Path) -> Persona:
@@ -77,8 +80,10 @@ def _load_persona(path: Path) -> Persona:
 
 def load() -> Config:
     default_model = os.environ["DEFAULT_MODEL"].lower().strip()
-    if default_model not in ("claude", "ollama"):
-        raise ValueError(f"DEFAULT_MODEL must be 'claude' or 'ollama', got {default_model!r}")
+    if default_model not in VALID_MODELS:
+        raise ValueError(
+            f"DEFAULT_MODEL must be one of {VALID_MODELS}, got {default_model!r}"
+        )
 
     return Config(
         telegram_token=os.environ["TELEGRAM_TOKEN"],
@@ -98,7 +103,7 @@ def load() -> Config:
         rag_chunk_size=int(os.environ["RAG_CHUNK_SIZE"]),
         rag_chunk_overlap=int(os.environ["RAG_CHUNK_OVERLAP"]),
         rag_embed_num_ctx=int(os.environ["RAG_EMBED_NUM_CTX"]),
-        mood_window=int(os.environ["MOOD_WINDOW"]),
-        mood_threshold=float(os.environ["MOOD_THRESHOLD"]),
-        mood_alert_low_msgs=int(os.environ["MOOD_ALERT_LOW_MSGS"]),
+        rock_bottom_window=int(os.environ["ROCK_BOTTOM_WINDOW"]),
+        rock_bottom_threshold=float(os.environ["ROCK_BOTTOM_THRESHOLD"]),
+        rock_bottom_alert_low_msgs=int(os.environ["ROCK_BOTTOM_ALERT_LOW_MSGS"]),
     )

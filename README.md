@@ -1,8 +1,14 @@
+<img src="bot.jpg" align="left" width="80" hspace="16" alt="Mac bot profile">
+
 # met-me
 
 > Un bot Telegram di supporto emotivo. Ascolto, empatia, niente giudizio.
 
-**met-me** è un assistente conversazionale basato su LLM (Claude o Ollama, intercambiabili a caldo) pensato per offrire uno spazio d'ascolto sicuro e accogliente. Persona configurabile, knowledge base via RAG, tracciamento dell'umore con alert agli amministratori e ricerca web on-demand tramite tool calling.
+<br clear="left">
+
+
+
+**met-me** è un assistente conversazionale basato su LLM (Claude o Ollama, intercambiabili a caldo) pensato per offrire uno spazio d'ascolto sicuro e accogliente. Persona configurabile, knowledge base via RAG, tracciamento dello stato emotivo (*rock-bottom tracker*) con alert agli amministratori e ricerca web on-demand tramite tool calling.
 
 Il bot di default si chiama **Mac** — *"Be you. You'll be fine."*
 
@@ -12,12 +18,12 @@ Il bot di default si chiama **Mac** — *"Be you. You'll be fine."*
 
 - 🤖 **Due provider LLM**: Anthropic Claude (cloud) e Ollama (locale), selezionabili runtime da `/model`.
 - 📚 **RAG su documenti**: drag-and-drop di file (`.txt`, `.md`, `.pdf`, `.docx`) nella chat (admin) per arricchire la knowledge base. Indicizzazione incrementale via LlamaIndex + Chroma + embeddings Ollama.
-- 💚 **Mood tracking**: ogni messaggio utente viene classificato 0–10 da un LLM separato. Se la media mobile scende sotto soglia, gli admin ricevono un alert con i messaggi più critici.
+- 💚 **Rock-bottom tracker**: ogni messaggio utente viene classificato 0–10 da un LLM separato (0 = "rock bottom", 10 = positivo). Se la media mobile scende sotto soglia, gli admin ricevono un alert con i messaggi più critici.
 - 🔧 **Tool calling**: il modello può chiamare `search_web` (DuckDuckGo via `ddgs`) quando servono informazioni aggiornate. Layer tool-agnostic con adapter per Anthropic e Ollama.
-- 🗄️ **Persistenza SQLite**: utenti, cronologia conversazioni, mood scores, impostazioni. Niente stato in memoria.
+- 🗄️ **Persistenza SQLite**: utenti, cronologia conversazioni, rock-bottom scores, impostazioni. Niente stato in memoria.
 - 📝 **Logging strutturato**: log applicativo rotante + un file per utente (`logs/{user_id}.log`) con colonne fisse `tipo | modello | testo`.
 - 🎭 **Persona configurabile**: nome, welcome, prompt, comandi visibili — tutto in `persona.yaml`.
-- ⚙️ **Zero default magici**: ogni tunable (chunk size, top-k, soglia mood, finestra storico…) vive in `.env`. Missing var = fail-fast all'avvio.
+- ⚙️ **Zero default magici**: ogni tunable (chunk size, top-k, soglia rock-bottom, finestra storico…) vive in `.env`. Missing var = fail-fast all'avvio.
 
 ---
 
@@ -28,23 +34,23 @@ Il bot di default si chiama **Mac** — *"Be you. You'll be fine."*
 │  Telegram   │◄────►│  bot.py (handlers + routing) │
 └─────────────┘      └──────────────┬───────────────┘
                                     │
-       ┌────────────┬───────────────┼────────────────┬─────────────┐
-       ▼            ▼               ▼                ▼             ▼
-   ┌────────┐  ┌─────────┐    ┌───────────┐    ┌──────────┐  ┌──────────┐
-   │ db.py  │  │ llm.py  │    │  rag.py   │    │ mood.py  │  │ tools.py │
-   │SQLite  │  │Claude / │    │LlamaIndex │    │ scoring  │  │search_web│
-   │        │  │Ollama   │    │+ Chroma   │    │ + alert  │  │  (DDG)   │
-   └────────┘  └─────────┘    └───────────┘    └──────────┘  └──────────┘
+       ┌────────────┬───────────────┼─────────────────────┬──────────────┐
+       ▼            ▼               ▼                     ▼              ▼
+   ┌────────┐  ┌─────────┐    ┌───────────┐    ┌────────────────┐  ┌──────────┐
+   │ db.py  │  │ llm.py  │    │  rag.py   │    │ rock_bottom.py │  │ tools.py │
+   │SQLite  │  │Claude / │    │LlamaIndex │    │ scoring        │  │search_web│
+   │        │  │Ollama   │    │+ Chroma   │    │ + alert        │  │  (DDG)   │
+   └────────┘  └─────────┘    └───────────┘    └────────────────┘  └──────────┘
 ```
 
 | File | Ruolo |
 |------|-------|
 | [bot.py](bot.py) | Entry point: handlers Telegram, routing, logging, bootstrap |
 | [config.py](config.py) | Caricamento `.env` + `persona.yaml`, fail-fast su missing vars |
-| [db.py](db.py) | SQLite async (worker thread), schema `users` / `messages` / `mood_scores` / `settings` |
+| [db.py](db.py) | SQLite async (worker thread), schema `users` / `messages` / `rock_bottom_scores` / `settings` |
 | [llm.py](llm.py) | Provider Claude e Ollama dietro interfaccia comune, tool-use loop |
 | [rag.py](rag.py) | Ingestion incrementale con manifest, query su Chroma |
-| [mood.py](mood.py) | Classificatore 0–10 via LLM, parsing JSON robusto |
+| [rock_bottom.py](rock_bottom.py) | Classificatore 0–10 via LLM, parsing JSON robusto |
 | [tools.py](tools.py) | Registry tool-agnostic + adapter Anthropic/Ollama |
 | [persona.yaml](persona.yaml) | Nome, welcome, comandi, system prompt |
 
@@ -127,13 +133,13 @@ RAG_CHUNK_OVERLAP=32
 # Embed model context window (nomic-embed-text supports up to 8192)
 RAG_EMBED_NUM_CTX=8192
 
-# ---- Mood tracker ----
+# ---- Rock-bottom tracker ----
 # Rolling window size and threshold (0..10). Alert fires when avg drops below
-# threshold AND the window is full.
-MOOD_WINDOW=10
-MOOD_THRESHOLD=4.0
+# threshold AND the window is full. 0 = "rock bottom".
+ROCK_BOTTOM_WINDOW=10
+ROCK_BOTTOM_THRESHOLD=4.0
 # Lowest-scoring recent user messages attached to each alert
-MOOD_ALERT_LOW_MSGS=10
+ROCK_BOTTOM_ALERT_LOW_MSGS=10
 ```
 
 ### Avvio
@@ -202,7 +208,7 @@ Il bot **non sostituisce un professionista della salute mentale**. Il system pro
 - Evitare diagnosi e linguaggio clinico
 - Validare prima di proporre
 
-Gli admin ricevono alert proattivi quando la media mobile dell'umore di un utente scende sotto soglia, con allegati i messaggi a punteggio più basso per contesto. Usalo con responsabilità.
+Gli admin ricevono alert proattivi quando la media mobile dello stato emotivo di un utente scende sotto soglia, con allegati i messaggi a punteggio più basso per contesto. Usalo con responsabilità.
 
 ---
 

@@ -113,14 +113,13 @@ class Rag:
 
     # ---- Sync core ---------------------------------------------------------
 
-    def _wipe_sync(self) -> int:
+    def _wipe_sync(self) -> None:
         ids = self._collection.get().get("ids") or []
         if ids:
             self._collection.delete(ids=ids)
         self._manifest = {}
         if self._manifest_path.exists():
             self._manifest_path.unlink()
-        return len(ids)
 
     def _delete_file_nodes(self, file_name: str) -> None:
         # Chroma supports delete-by-metadata. SimpleDirectoryReader stamps each

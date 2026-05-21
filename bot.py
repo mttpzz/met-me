@@ -1,7 +1,7 @@
 """Telegram bot entry point.
 
 Connects a Telegram bot to an LLM (Claude or Ollama) and persists users,
-messages, mood scores and the active-model setting in SQLite. The active
+messages, rock-bottom scores and the active-model setting in SQLite. The active
 provider is chosen by admins via /model. Persona (name, welcome, prompt) is
 loaded from persona.yaml. Document RAG over rag/docs/ injects retrieved
 chunks into the system prompt per turn.
@@ -28,7 +28,7 @@ from telegram.ext import (
 import config
 from db import Database
 from llm import LLMProvider, build_providers
-from mood import MoodScorer
+from rock_bottom import RockBottomTracker
 from rag import Rag
 
 ACTIVE_MODEL_KEY = "active_model"
@@ -214,7 +214,7 @@ RAG = Rag(
     CFG.rag_chunk_overlap,
     CFG.rag_embed_num_ctx,
 )
-MOOD = MoodScorer(CFG)
+ROCK_BOTTOM = RockBottomTracker(CFG)
 
 # Seed the active_model setting on first run, then trust the DB value afterwards.
 if DB.get_setting_sync(ACTIVE_MODEL_KEY) is None:
@@ -425,8 +425,10 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     for chunk in split_for_telegram(reply):
         await msg.reply_text(chunk)
 
-    # Score the mood out of band so the reply is not delayed by a second LLM call.
-    asyncio.create_task(_track_mood(context.bot, u.id, text, user_msg_id, model_name))
+    # Score rock-bottom out of band so the reply is not delayed by a second LLM call.
+    asyncio.create_task(
+        _track_rock_bottom(context.bot, u.id, text, user_msg_id, model_name)
+    )
 
 
 def _build_system_prompt(retrieved: list[str]) -> str:
@@ -441,45 +443,53 @@ def _build_system_prompt(retrieved: list[str]) -> str:
     )
 
 
-# ---- Mood tracking ----------------------------------------------------------
+# ---- Rock-bottom tracking ---------------------------------------------------
 
-async def _track_mood(
+async def _track_rock_bottom(
     bot: Bot,
     user_id: int,
     user_msg: str,
     user_msg_id: int,
     model_name: str,
 ) -> None:
-    """Score the just-posted user message, persist it, and alert admins when
-    the rolling average crosses the configured threshold.
+    """Score the just-posted user message on the rock-bottom scale, persist it,
+    and alert admins when the rolling average crosses the configured threshold.
 
     Runs as a background task: any failure is logged but never surfaced to the
     user or the chat handler.
     """
-    score = await MOOD.score(model_name, user_msg)
+    score = await ROCK_BOTTOM.score(model_name, user_msg)
     if score is None:
-        log_event(user_id, "MOOD | scoring failed")
+        log_event(user_id, "ROCK_BOTTOM | scoring failed")
         return
 
-    await DB.add_mood(user_id, score, user_msg_id)
-    avg, count = await DB.recent_mood_avg(user_id, CFG.mood_window)
+    await DB.add_rock_bottom_score(user_id, score, user_msg_id)
+    avg, count = await DB.recent_rock_bottom_avg(user_id, CFG.rock_bottom_window)
     log_event(
         user_id,
-        f"MOOD | score={score:.2f} avg={avg:.2f} window={count}/{CFG.mood_window}",
+        f"ROCK_BOTTOM | score={score:.2f} avg={avg:.2f} "
+        f"window={count}/{CFG.rock_bottom_window}",
     )
 
     # Require a full window of scores before alerting: with fewer samples a single
     # bad message could trip the threshold and produce noisy false positives.
-    if avg is None or count < CFG.mood_window or avg >= CFG.mood_threshold:
+    if (
+        avg is None
+        or count < CFG.rock_bottom_window
+        or avg >= CFG.rock_bottom_threshold
+    ):
         return
 
     user_row = await DB.get_user(user_id)
     low_msgs = await DB.lowest_recent_user_msgs(
-        user_id, CFG.mood_window, CFG.mood_alert_low_msgs
+        user_id, CFG.rock_bottom_window, CFG.rock_bottom_alert_low_msgs
     )
     alert_text = _format_alert(user_row, avg, count, low_msgs)
     await _alert_admins(bot, alert_text)
-    log_event(user_id, f"MOOD | ALERT sent (avg={avg:.2f} < {CFG.mood_threshold:.2f})")
+    log_event(
+        user_id,
+        f"ROCK_BOTTOM | ALERT sent (avg={avg:.2f} < {CFG.rock_bottom_threshold:.2f})",
+    )
 
 
 def _format_alert(
@@ -501,10 +511,10 @@ def _format_alert(
         )
 
     lines = [
-        "Mood alert",
+        "Rock-bottom alert",
         header,
-        f"avg={avg:.2f} (threshold={CFG.mood_threshold:.2f}, "
-        f"window={count}/{CFG.mood_window})",
+        f"avg={avg:.2f} (threshold={CFG.rock_bottom_threshold:.2f}, "
+        f"window={count}/{CFG.rock_bottom_window})",
     ]
     if low_msgs:
         lines.append("")
@@ -527,7 +537,7 @@ async def _alert_admins(bot: Bot, text: str) -> None:
         except Exception:
             # An admin may have blocked the bot or never started a chat with it;
             # never let one bad recipient stop the others from being notified.
-            log.exception("Failed to send mood alert to admin %s", admin_id)
+            log.exception("Failed to send rock-bottom alert to admin %s", admin_id)
 
 
 # ---- Bootstrap --------------------------------------------------------------

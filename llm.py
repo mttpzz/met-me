@@ -13,6 +13,7 @@ History is a list of {"role": "user"|"assistant", "content": str} dicts.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import Awaitable, Callable, Protocol
 
@@ -152,14 +153,17 @@ class OllamaProvider:
             for tc in tool_calls:
                 fn = tc.get("function", {})
                 name = fn.get("name", "")
-                args = fn.get("arguments") or {}
-                if isinstance(args, str):
-                    # Some Ollama backends serialize arguments as a JSON string.
-                    result = await run_tool(name, args)
-                    parsed_args: dict = {}
+                raw_args = fn.get("arguments") or {}
+                # Some Ollama backends serialize arguments as a JSON string;
+                # parse here so the on_tool hook sees a real dict.
+                if isinstance(raw_args, str):
+                    try:
+                        parsed_args = json.loads(raw_args) if raw_args else {}
+                    except json.JSONDecodeError:
+                        parsed_args = {}
                 else:
-                    parsed_args = dict(args)
-                    result = await run_tool(name, parsed_args)
+                    parsed_args = dict(raw_args)
+                result = await run_tool(name, parsed_args)
                 await _emit_tool(on_tool, name, parsed_args, result)
                 messages.append({"role": "tool", "name": name, "content": result})
 
