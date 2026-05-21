@@ -1,0 +1,97 @@
+# ---- Secrets / local config ----
+.env
+.env.*
+!.env.example
+
+# ---- Local data ----
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+bot.db
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ---- Virtual envs ----
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# ---- Testing / coverage ----
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+nosetests.xml
+coverage.xml
+*.cover
+
+# ---- Logs ----
+*.log
+logs/
+
+# ---- IDE / editors ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# ---- OS junk ----
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+# Linux
+.directory
+.Trash-*
+
+# ---- Jupyter / notebooks ----
+.ipynb_checkpoints/
+
+# ---- Type checkers / linters extras ----
+.pyre/
+.pytype/
+.dmypy.json
+dmypy.json
