@@ -10,15 +10,26 @@ chunks into the system prompt per turn.
 from __future__ import annotations
 
 import asyncio
+import collections
 import logging
 import logging.handlers
 import sqlite3
+import time
 
-from telegram import Bot, BotCommand, BotCommandScopeChat, Update, User
+from telegram import (
+    Bot,
+    BotCommand,
+    BotCommandScopeChat,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Update,
+    User,
+)
 from telegram.constants import ChatAction
 from telegram.error import RetryAfter
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
@@ -235,7 +246,65 @@ async def cmd_start(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     u = update.effective_user
     await DB.upsert_user(u.id, u.username, u.first_name, u.last_name)
     log_cmd(u, "/start")
-    await update.message.reply_text(PERSONA.welcome)
+    if await DB.has_consent(u.id, CFG.consent_version):
+        await update.message.reply_text(PERSONA.welcome)
+        return
+    # First-time user (or consent version bumped): show the explicit consent
+    # prompt with inline accept/decline buttons. No further interaction is
+    # accepted until they tap accept.
+    log_event(u.id, f"CONSENT | requested (version={CFG.consent_version})")
+    await update.message.reply_text(
+        _consent_request_text(),
+        reply_markup=_consent_keyboard(),
+        disable_web_page_preview=True,
+    )
+
+
+async def on_consent_callback(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle taps on the consent inline keyboard.
+
+    On accept: persist the consent under the current policy version, send the
+    welcome + consent_accepted text, and strip the buttons from the original
+    message so they cannot be re-tapped.
+    On decline: edit the prompt to a "no data processed" notice and log the
+    refusal. The user can re-enter the flow by sending /start again.
+    """
+    query = update.callback_query
+    u = query.from_user
+    await query.answer()
+    data = query.data or ""
+
+    if data == _CONSENT_CALLBACK_ACCEPT:
+        await DB.upsert_user(u.id, u.username, u.first_name, u.last_name)
+        await DB.record_consent(u.id, CFG.consent_version)
+        log_event(u.id, f"CONSENT | granted (version={CFG.consent_version})")
+        await query.edit_message_reply_markup(reply_markup=None)
+        await query.message.reply_text(PERSONA.welcome)
+        return
+
+    if data == _CONSENT_CALLBACK_DECLINE:
+        log_event(u.id, f"CONSENT | declined (version={CFG.consent_version})")
+        await query.edit_message_text(PERSONA.consent_declined)
+        return
+
+    log.warning("Unknown consent callback data: %r", data)
+
+
+async def _ensure_consent(update: Update) -> bool:
+    """Return True if the calling user has granted consent under the current
+    version. Otherwise reply with the prompt and return False so the caller
+    can short-circuit the handler.
+    """
+    u = update.effective_user
+    if await DB.has_consent(u.id, CFG.consent_version):
+        return True
+    log_event(u.id, "CONSENT | blocked interaction (no current-version consent)")
+    await update.effective_message.reply_text(
+        _consent_request_text(),
+        reply_markup=_consent_keyboard(),
+        disable_web_page_preview=True,
+    )
+    return False
 
 
 async def cmd_help(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -250,9 +319,146 @@ async def cmd_help(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_reset(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     u = update.effective_user
     log_cmd(u, "/reset")
+    if not await _ensure_consent(update):
+        return
     deleted = await DB.clear_history(u.id)
     log_event(u.id, f"RESET | {deleted} messages deleted")
-    await update.message.reply_text("Conversation cleared.")
+    await update.message.reply_text("Cronologia cancellata.")
+
+
+async def cmd_privacy(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    u = update.effective_user
+    log_cmd(u, "/privacy")
+    text = PERSONA.privacy.format(policy_url=CFG.privacy_policy_url)
+    for chunk in split_for_telegram(text):
+        await update.message.reply_text(chunk, disable_web_page_preview=True)
+
+
+_FORGET_PENDING_KEY = "forget_pending_at"
+
+# Callback-data prefix used by the consent inline keyboard. Keep the prefix
+# narrow and explicit so we never confuse it with other future callbacks.
+_CONSENT_CALLBACK_ACCEPT = "consent:accept"
+_CONSENT_CALLBACK_DECLINE = "consent:decline"
+
+# Per-user sliding window of recent text-message timestamps, used by the
+# burst rate limiter. In-memory only: a bot restart wipes counters, which is
+# fine because the window is short (seconds) and entries would expire anyway.
+_rate_limit_buckets: dict[int, collections.deque[float]] = {}
+
+
+def _consent_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(
+                PERSONA.consent_button_accept,
+                callback_data=_CONSENT_CALLBACK_ACCEPT,
+            )],
+            [InlineKeyboardButton(
+                PERSONA.consent_button_decline,
+                callback_data=_CONSENT_CALLBACK_DECLINE,
+            )],
+        ]
+    )
+
+
+def _format_hotlines() -> str:
+    """Render hotlines as a bullet list. Single source of truth for the
+    numbers shown in the consent prompt, the LLM system prompt on crisis, and
+    the fallback crisis message."""
+    return "\n".join(f"• {h}" for h in PERSONA.hotlines)
+
+
+def _consent_request_text() -> str:
+    return PERSONA.consent_request.format(
+        policy_url=CFG.privacy_policy_url,
+        hotlines=_format_hotlines(),
+    )
+
+
+def _crisis_response_text() -> str:
+    return PERSONA.crisis_response.format(hotlines=_format_hotlines())
+
+
+def _detect_crisis(text: str) -> str | None:
+    """Return the first crisis keyword matched in ``text`` (or None).
+
+    Lowercase substring match. Conservative on purpose: false positives mean
+    the user gets emergency numbers shown unnecessarily, which is acceptable;
+    false negatives in this context are not.
+    """
+    low = text.lower()
+    for kw in PERSONA.crisis_keywords:
+        if kw in low:
+            return kw
+    return None
+
+
+def _within_rate_limit(user_id: int) -> bool:
+    """Return True if the user is allowed to send another text message now.
+
+    The rejected timestamp is NOT appended to the bucket, so a flooder cannot
+    keep extending their own cooldown by retrying — only successful messages
+    consume the budget.
+    """
+    now = time.time()
+    window = CFG.rate_limit_burst_window_seconds
+    bucket = _rate_limit_buckets.setdefault(user_id, collections.deque())
+    while bucket and now - bucket[0] > window:
+        bucket.popleft()
+    if len(bucket) >= CFG.rate_limit_burst_count:
+        return False
+    bucket.append(now)
+    return True
+
+
+def _normalize_phrase(text: str) -> str:
+    """Forgiving comparison for the /forget confirmation phrase.
+
+    Strips surrounding whitespace, collapses internal whitespace runs to a single
+    space, drops trailing punctuation, and lowercases — so trailing dots, double
+    spaces, or different casing do not block a clearly-intended confirmation.
+    """
+    collapsed = " ".join(text.split())
+    return collapsed.rstrip(".!?…").lower()
+
+
+async def cmd_forget(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """GDPR "right to erasure" — step 1: mark the user as awaiting confirmation.
+
+    The actual deletion happens in ``on_text`` when the next message matches the
+    confirmation phrase. Pending state lives in PTB's per-user ``user_data`` and
+    expires after ``FORGET_CONFIRM_TIMEOUT_SECONDS``.
+    """
+    u = update.effective_user
+    log_cmd(u, "/forget")
+    context.user_data[_FORGET_PENDING_KEY] = time.time()
+    await update.message.reply_text(PERSONA.forget_warning)
+
+
+async def _perform_forget(update: Update) -> None:
+    """Delete the user's DB rows and per-user log file, then confirm."""
+    u = update.effective_user
+    counts = await DB.delete_user(u.id)
+    log_event(
+        u.id,
+        f"FORGET | users={counts['users']} messages={counts['messages']} "
+        f"scores={counts['rock_bottom_scores']}",
+    )
+    # Drop the per-user log file and detach handlers so a future /start from
+    # the same user_id starts a fresh log instead of appending to the old one.
+    logger = _user_loggers.pop(u.id, None)
+    if logger is not None:
+        for h in list(logger.handlers):
+            h.close()
+            logger.removeHandler(h)
+    log_path = LOG_DIR / f"{u.id}.log"
+    try:
+        log_path.unlink(missing_ok=True)
+    except OSError as exc:
+        log.warning("Could not delete log file %s: %s", log_path, exc)
+
+    await update.message.reply_text(PERSONA.forget_done)
 
 
 async def cmd_model(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -388,10 +594,56 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     u = update.effective_user
     text = msg.text or ""
 
+    # Intercept the /forget confirmation flow BEFORE we touch the DB or log the
+    # message: a user mid-deletion shouldn't have their confirmation phrase
+    # persisted as a normal chat turn.
+    pending_at = context.user_data.get(_FORGET_PENDING_KEY)
+    if pending_at is not None:
+        expired = (time.time() - pending_at) > CFG.forget_confirm_timeout_seconds
+        context.user_data.pop(_FORGET_PENDING_KEY, None)
+        if expired:
+            log_event(u.id, "FORGET | confirmation expired, treating as normal message")
+        elif _normalize_phrase(text) == _normalize_phrase(PERSONA.forget_confirm_phrase):
+            log_user(u, text)
+            await _perform_forget(update)
+            return
+        else:
+            log_event(u.id, "FORGET | confirmation cancelled by mismatched reply")
+            await msg.reply_text(PERSONA.forget_cancelled)
+            return
+
+    # GDPR art. 9: no message is processed, stored, or sent to the LLM until
+    # the user has granted explicit consent under the current policy version.
+    if not await _ensure_consent(update):
+        return
+
+    # Anti-flood burst limiter. Runs after the /forget flow so a user who is
+    # mid-deletion can always complete it, and before any DB write so dropped
+    # messages leave no trace beyond the rate-limit log event.
+    if not _within_rate_limit(u.id):
+        log_event(
+            u.id,
+            f"RATE_LIMIT | dropped ({CFG.rate_limit_burst_count} msgs in "
+            f"{CFG.rate_limit_burst_window_seconds}s)",
+        )
+        await msg.reply_text(PERSONA.rate_limit_message)
+        return
+
     # Refresh user profile on every message: names/usernames can change over time.
     await DB.upsert_user(u.id, u.username, u.first_name, u.last_name)
 
     log_user(u, text)
+
+    # Crisis-keyword detection. We don't send a separate message here: the
+    # hotline numbers and instructions are instead injected into the LLM
+    # system prompt below so the model produces ONE coherent empathetic reply
+    # that already contains the numbers. The fixed `crisis_response` text is
+    # only used as a fallback when the LLM call fails. Detection is a coarse
+    # substring match — we accept false positives because under-triggering on
+    # real crisis signals would be the more dangerous failure mode.
+    crisis_kw = _detect_crisis(text)
+    if crisis_kw is not None:
+        log_event(u.id, f"CRISIS | keyword={crisis_kw!r}")
 
     model_name = await active_model()
     provider = PROVIDERS[model_name]
@@ -400,7 +652,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Retrieve relevant document chunks from rag/docs/ and inject them into the
     # system prompt as background knowledge.
     retrieved = await RAG.query(text, CFG.rag_top_k)
-    system = _build_system_prompt(retrieved)
+    system = _build_system_prompt(retrieved, crisis=crisis_kw is not None)
 
     await msg.chat.send_action(ChatAction.TYPING)
 
@@ -412,9 +664,15 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as exc:
         log.exception("LLM error for user %s with provider %s", u.id, provider.name)
         log_error(u.id, provider.name, exc)
-        await msg.reply_text(
-            "Sorry, something went wrong. Please try again in a moment."
-        )
+        if crisis_kw is not None:
+            # Safety net: even if the LLM is unreachable, a crisis-flagged
+            # turn must reach the user with hotline numbers.
+            for chunk in split_for_telegram(_crisis_response_text()):
+                await msg.reply_text(chunk)
+        else:
+            await msg.reply_text(
+                "Mi dispiace, qualcosa è andato storto. Riprova tra un momento."
+            )
         return
 
     # Only persist after a successful response, to keep the conversation log consistent.
@@ -431,16 +689,32 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-def _build_system_prompt(retrieved: list[str]) -> str:
-    if not retrieved:
-        return SYSTEM_PROMPT
-    bullets = "\n\n".join(f"- {m}" for m in retrieved)
-    return (
-        f"{SYSTEM_PROMPT}\n\n"
-        "Knowledge base (estratti rilevanti da documenti caricati; "
-        "usa solo se pertinenti, cita la fonte se opportuno):\n"
-        f"{bullets}"
-    )
+def _build_system_prompt(retrieved: list[str], crisis: bool = False) -> str:
+    parts = [SYSTEM_PROMPT]
+    if retrieved:
+        bullets = "\n\n".join(f"- {m}" for m in retrieved)
+        parts.append(
+            "Knowledge base (estratti rilevanti da documenti caricati; "
+            "usa solo se pertinenti, cita la fonte se opportuno):\n"
+            f"{bullets}"
+        )
+    if crisis:
+        # When the user's message tripped the crisis keyword filter we add the
+        # emergency numbers and an explicit instruction to the LLM. The model
+        # is responsible for weaving the numbers into a single empathetic reply
+        # so the user gets one coherent message — not two consecutive sends.
+        parts.append(
+            "SICUREZZA — possibile crisi: nel messaggio dell'utente sono comparsi segnali "
+            "di potenziale autolesionismo, ideazione suicidaria o disperazione acuta. "
+            "Nella tua risposta DEVI:\n"
+            "1) Validare con calore e brevità (frasi corte, presenza, niente clinico).\n"
+            "2) Invitare gentilmente a non restare solo/a con questi pensieri ora.\n"
+            "3) Includere ESATTAMENTE questi numeri di emergenza, integrandoli nel testo in modo "
+            "naturale (puoi usarli come elenco a fine messaggio se aiuta la leggibilità):\n"
+            f"{_format_hotlines()}\n"
+            "Non inventare altri numeri, non parafrasarli, non ometterne."
+        )
+    return "\n\n".join(parts)
 
 
 # ---- Rock-bottom tracking ---------------------------------------------------
@@ -606,12 +880,15 @@ def main() -> None:
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("reset", cmd_reset))
+    app.add_handler(CommandHandler("privacy", cmd_privacy))
+    app.add_handler(CommandHandler("forget", cmd_forget))
     app.add_handler(CommandHandler("model", cmd_model))
     app.add_handler(CommandHandler("users", cmd_users))
     app.add_handler(CommandHandler("stats", cmd_stats))
     app.add_handler(CommandHandler("reindex", cmd_reindex))
     app.add_handler(MessageHandler(filters.Document.ALL, on_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+    app.add_handler(CallbackQueryHandler(on_consent_callback, pattern=r"^consent:"))
 
     log.info(
         "Bot starting. default_model=%s active_model=%s admins=%s db=%s",

@@ -7,6 +7,7 @@ Tables:
   users              - one row per Telegram user, refreshed on every message
   messages           - full conversation log; history is reconstructed from this
   rock_bottom_scores - per-message 0..10 score from the rock-bottom tracker
+  consents           - GDPR consent records, one row per (user_id, version)
   settings           - key/value store (e.g. active_model)
 """
 
@@ -50,6 +51,14 @@ CREATE TABLE IF NOT EXISTS rock_bottom_scores (
 );
 
 CREATE INDEX IF NOT EXISTS idx_rock_bottom_user ON rock_bottom_scores(user_id, id);
+
+CREATE TABLE IF NOT EXISTS consents (
+    user_id     INTEGER NOT NULL,
+    version     TEXT    NOT NULL,
+    granted_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, version),
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
 
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
@@ -213,6 +222,54 @@ class Database:
 
     async def clear_history(self, user_id: int) -> int:
         return await self._run(self._clear_history_sync, user_id)
+
+    def _delete_user_sync(self, user_id: int) -> dict[str, int]:
+        # Children first (no ON DELETE CASCADE on the existing schema), then the
+        # user row itself. Returns counts so the caller can log what was wiped.
+        rb = self._execute(
+            "DELETE FROM rock_bottom_scores WHERE user_id = ?", (user_id,)
+        ).rowcount
+        msgs = self._execute(
+            "DELETE FROM messages WHERE user_id = ?", (user_id,)
+        ).rowcount
+        cons = self._execute(
+            "DELETE FROM consents WHERE user_id = ?", (user_id,)
+        ).rowcount
+        usr = self._execute(
+            "DELETE FROM users WHERE user_id = ?", (user_id,)
+        ).rowcount
+        return {
+            "users": usr,
+            "messages": msgs,
+            "rock_bottom_scores": rb,
+            "consents": cons,
+        }
+
+    async def delete_user(self, user_id: int) -> dict[str, int]:
+        return await self._run(self._delete_user_sync, user_id)
+
+    # ---- Consent (GDPR art. 9 — special-category data) --------------------
+
+    def _has_consent_sync(self, user_id: int, version: str) -> bool:
+        row = self._execute(
+            "SELECT 1 FROM consents WHERE user_id = ? AND version = ?",
+            (user_id, version),
+        ).fetchone()
+        return row is not None
+
+    async def has_consent(self, user_id: int, version: str) -> bool:
+        return await self._run(self._has_consent_sync, user_id, version)
+
+    def _record_consent_sync(self, user_id: int, version: str) -> None:
+        # INSERT OR IGNORE so re-tapping the accept button is a no-op rather
+        # than a constraint error. The original granted_at is preserved.
+        self._execute(
+            "INSERT OR IGNORE INTO consents (user_id, version) VALUES (?, ?)",
+            (user_id, version),
+        )
+
+    async def record_consent(self, user_id: int, version: str) -> None:
+        await self._run(self._record_consent_sync, user_id, version)
 
     # ---- Rock-bottom tracker -----------------------------------------------
 

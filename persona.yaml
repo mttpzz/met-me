@@ -5,10 +5,106 @@ short_description: Be you. You'll be fine.
 welcome: |
   Hi, my name is Mac 👋
 
+  Scrivi pure nella lingua che preferisci.
+  /help per i comandi, /privacy e /forget per i tuoi dati.
+
+privacy: |
+  Privacy in breve
+
+  Cosa salvo: ID Telegram, username, nome (se impostato), tutti i messaggi e un punteggio 0-10 sul tono emotivo. Le conversazioni possono essere lette dagli amministratori e inviate al provider del modello LLM per generare le risposte.
+
+  Cosa puoi fare:
+  • /reset cancella la cronologia (rimani registrato)
+  • /forget cancella tutto: profilo, messaggi, punteggi, log
+
+  Informativa completa, base giuridica, contatti e diritti GDPR:
+  {policy_url}
+
+forget_warning: |
+  Stai per cancellare permanentemente TUTTI i tuoi dati: profilo, messaggi, punteggi, log. Operazione irreversibile.
+
+  Per confermare, scrivi esattamente questa frase nel prossimo messaggio:
+
+  Confermo, cancella i miei dati
+
+forget_confirm_phrase: |
+  Confermo, cancella i miei dati
+
+forget_cancelled: |
+  Cancellazione annullata. Nessun dato è stato modificato.
+
+forget_done: |
+  Tutti i tuoi dati sono stati cancellati. Se vuoi riprovare il bot in futuro, manda /start.
+
+rate_limit_message: |
+  Sto ancora processando, riprova tra qualche secondo.
+
+consent_request: |
+  Prima di iniziare, alcune cose importanti.
+
+  Mac è uno spazio per parlare di come stai, ma NON è un servizio medico, psicologico o sanitario e NON sostituisce il parere di un professionista qualificato. In caso di crisi o pensieri di farti del male chiama subito:
+  {hotlines}
+
+  Quello che scrivi viene salvato e può essere letto dagli amministratori del bot. Il provider del modello LLM riceve i tuoi messaggi per generare le risposte.
+
+  Per usare Mac devi:
+  • avere almeno 18 anni
+  • aver letto l'informativa privacy completa: {policy_url}
+  • dare il consenso esplicito al trattamento dei tuoi dati, incluse le informazioni sulla salute mentale (art. 9 GDPR)
+
+  Puoi revocare il consenso e cancellare tutti i tuoi dati in qualsiasi momento con /forget.
+
+consent_buttons:
+  accept: "✅ Ho 18+ anni e acconsento"
+  decline: "❌ Non acconsento"
+
+consent_declined: |
+  Va bene, nessun dato trattato. Se cambi idea manda /start.
+
+consent_required: |
+  Per usare Mac serve prima accettare la privacy. Manda /start per vedere i termini.
+
+crisis_keywords:
+  - suicidio
+  - suicida
+  - mi uccido
+  - uccidermi
+  - ammazzarmi
+  - ammazzo
+  - farla finita
+  - non voglio più vivere
+  - togliermi la vita
+  - autolesionismo
+  - tagliarmi
+  - mi taglio
+  - mi faccio del male
+  - voglio morire
+  - finirla qui
+  - non ce la faccio più
+
+hotlines:
+  - "📞 Telefono Amico Italia — 02 2327 2327 (10:00–24:00)"
+  - "📞 Samaritans Onlus — 800 86 00 22 (13:00–22:00)"
+  - "📞 Telefono Azzurro (under 18) — 19696 (24/7)"
+  - "🚑 Emergenza sanitaria — 112"
+
+# Fallback message sent only if the LLM call fails on a turn flagged as a
+# crisis. In normal flow the LLM weaves the hotlines into its own reply via
+# the system-prompt instruction, and this fixed text is not used.
+crisis_response: |
+  Quello che stai dicendo è importante e non sei solo/a. Se stai pensando di farti del male, ti chiedo di non restare solo/a con questi pensieri adesso.
+
+  Chiama subito una di queste linee, sono gratuite o a costo locale e con persone formate:
+  {hotlines}
+
+  Resto qui, parlane con me.
+
 help_user:
-  - /start - welcome message
-  - /help - this list
-  - /reset - clear the conversation history
+  - /start - messaggio di benvenuto
+  - /help - questa lista
+  - /reset - cancella la cronologia della conversazione
+  - /privacy - cosa viene salvato e come cancellarlo
+  - /forget - cancella permanentemente tutti i tuoi dati
 
 help_admin:
   - /model - show the active model
