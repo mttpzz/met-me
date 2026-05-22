@@ -36,8 +36,28 @@ forget_cancelled: |
 forget_done: |
   Tutti i tuoi dati sono stati cancellati. Se vuoi riprovare il bot in futuro, manda /start.
 
+export_done: |
+  Ecco una copia dei tuoi dati. Lo zip contiene 4 file CSV (profile, consents, messages, rock_bottom_scores) leggibili con Excel, Google Sheets o un editor di testo.
+
+export_empty: |
+  Non ho dati da esportare per il tuo profilo.
+
+feedback_usage: |
+  Per mandare un feedback scrivi: /feedback <il tuo messaggio>
+
+  Esempio: /feedback Mi piacerebbe poter cambiare lingua a metà conversazione.
+
+feedback_thanks: |
+  Grazie. Il tuo feedback è stato inoltrato agli amministratori.
+
+feedback_no_admins: |
+  Al momento non è possibile inviare feedback. Riprova più tardi.
+
 rate_limit_message: |
   Sto ancora processando, riprova tra qualche secondo.
+
+banned_message: |
+  Il tuo accesso al bot è stato sospeso. Per chiarimenti contatta l'amministratore (i contatti sono indicati in /privacy).
 
 consent_request: |
   Prima di iniziare, alcune cose importanti.
@@ -104,6 +124,8 @@ help_user:
   - /help - questa lista
   - /reset - cancella la cronologia della conversazione
   - /privacy - cosa viene salvato e come cancellarlo
+  - /export - scarica una copia dei tuoi dati (CSV)
+  - /feedback - manda un feedback agli amministratori
   - /forget - cancella permanentemente tutti i tuoi dati
 
 help_admin:
@@ -112,6 +134,9 @@ help_admin:
   - /users - list users
   - /stats - bot statistics
   - /reindex - rebuild the document index from rag/docs/
+  - /ban <user_id> [reason] - block a user from interacting with the bot
+  - /unban <user_id> - lift a ban
+  - /bans - list currently banned users
 
 prompt: |
   Ruolo: Agisci come un assistente di supporto emotivo e benessere. Offri uno spazio d'ascolto sicuro, accogliente, privo di giudizio e profondamente umano. Evita di etichettare la conversazione come "psicologica" o "clinica"; parla semplicemente di benessere, ascolto, emozioni.

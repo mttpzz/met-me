@@ -11,3 +11,4 @@ llama-index-vector-stores-chroma>=0.5
 llama-index-embeddings-ollama>=0.9
 pypdf>=6.0
 docx2txt>=0.9
+sentry-sdk>=2.0

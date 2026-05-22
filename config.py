@@ -32,7 +32,13 @@ class Persona:
     forget_confirm_phrase: str
     forget_cancelled: str
     forget_done: str
+    export_done: str
+    export_empty: str
+    feedback_usage: str
+    feedback_thanks: str
+    feedback_no_admins: str
     rate_limit_message: str
+    banned_message: str
     consent_request: str
     consent_button_accept: str
     consent_button_decline: str
@@ -85,6 +91,15 @@ class Config:
     rate_limit_burst_count: int            # max user messages per burst window
     rate_limit_burst_window_seconds: int   # burst window length in seconds
 
+    # Retention / auto-purge of conversation data (art. 5(1)(c) GDPR).
+    message_retention_days: int            # 0 disables the purge job
+    message_purge_day: int                 # 1-28, day of month to run the job
+    message_purge_hour: int                # 0-23, hour of day to run the job
+
+    # Sentry error tracking. Empty DSN keeps the SDK uninitialized.
+    sentry_dsn: str
+    sentry_environment: str
+
     valid_models: tuple[str, ...] = field(default_factory=lambda: VALID_MODELS)
 
 
@@ -103,7 +118,13 @@ def _load_persona(path: Path) -> Persona:
         forget_confirm_phrase=data["forget_confirm_phrase"].strip(),
         forget_cancelled=data["forget_cancelled"].rstrip("\n"),
         forget_done=data["forget_done"].rstrip("\n"),
+        export_done=data["export_done"].rstrip("\n"),
+        export_empty=data["export_empty"].rstrip("\n"),
+        feedback_usage=data["feedback_usage"].rstrip("\n"),
+        feedback_thanks=data["feedback_thanks"].rstrip("\n"),
+        feedback_no_admins=data["feedback_no_admins"].rstrip("\n"),
         rate_limit_message=data["rate_limit_message"].rstrip("\n"),
+        banned_message=data["banned_message"].rstrip("\n"),
         consent_request=data["consent_request"].rstrip("\n"),
         consent_button_accept=consent_buttons["accept"],
         consent_button_decline=consent_buttons["decline"],
@@ -123,6 +144,18 @@ def load() -> Config:
     if default_model not in VALID_MODELS:
         raise ValueError(
             f"DEFAULT_MODEL must be one of {VALID_MODELS}, got {default_model!r}"
+        )
+
+    purge_day = int(os.environ["MESSAGE_PURGE_DAY"])
+    if not 1 <= purge_day <= 28:
+        raise ValueError(
+            f"MESSAGE_PURGE_DAY must be 1-28 (capped at 28 to avoid short-month "
+            f"issues), got {purge_day}"
+        )
+    purge_hour = int(os.environ["MESSAGE_PURGE_HOUR"])
+    if not 0 <= purge_hour <= 23:
+        raise ValueError(
+            f"MESSAGE_PURGE_HOUR must be 0-23, got {purge_hour}"
         )
 
     return Config(
@@ -151,4 +184,9 @@ def load() -> Config:
         rate_limit_burst_window_seconds=int(os.environ["RATE_LIMIT_BURST_WINDOW_SECONDS"]),
         consent_version=os.environ["CONSENT_VERSION"].strip(),
         privacy_policy_url=os.environ["PRIVACY_POLICY_URL"].strip(),
+        message_retention_days=int(os.environ["MESSAGE_RETENTION_DAYS"]),
+        message_purge_day=purge_day,
+        message_purge_hour=purge_hour,
+        sentry_dsn=os.environ["SENTRY_DSN"].strip(),
+        sentry_environment=os.environ["SENTRY_ENVIRONMENT"].strip() or "production",
     )

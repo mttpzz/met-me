@@ -42,6 +42,7 @@ Il presente documento è il template iniziale di DPIA per il bot **met-me**. Va 
 - **Responsabili del trattamento (art. 28):**
   - **Telegram FZ-LLC** — piattaforma di messaggistica.
   - **Anthropic, PBC** — provider LLM (Claude) per la generazione delle risposte. Trasferimento dati negli Stati Uniti, coperto da Data Processing Addendum e Standard Contractual Clauses.
+  - **Functional Software, Inc. d/b/a Sentry** — error monitoring (region EU, Francoforte). Riceve solo stack trace ed eccezioni; nessun identificativo utente né contenuto messaggi.
 - **Interessati:** utenti finali del bot, maggiorenni.
 
 ---
@@ -94,15 +95,15 @@ _Compilare le colonne Probabilità / Gravità / Punteggio una volta valutati con
 | Rischio | Misure attualmente implementate | Misure da implementare |
 |---|---|---|
 | R1 | DB SQLite su sistema controllato dal titolare. File `.env` e DB non versionati. | Cifratura del DB at-rest, controllo accessi al sistema, audit log accessi. |
-| R2 | Token in `.env` gitignored. Rotazione token Telegram effettuata. Cap di spesa configurato su Anthropic. | Vault per i secret in produzione, rotazione periodica, monitoring uso anomalo. |
-| R3 | Detection keyword di crisi → invio numeri verdi prima della risposta LLM. System prompt LLM addestrato a riconoscere crisi e indirizzare a emergenza. Rock-bottom tracker con alert agli admin. | Espansione keyword multilingua, procedura formale di follow-up admin su alert. |
-| R4 | Anthropic DPA + Standard Contractual Clauses. Trasferimento dichiarato in informativa. | Valutazione opzioni provider UE-based. |
+| R2 | Token in `.env` gitignored. Rotazione token Telegram effettuata. Cap di spesa configurato su Anthropic. Sentry (region EU) attivo per cattura eccezioni e diagnostica. | Vault per i secret in produzione, rotazione periodica, alert su error burst Sentry. |
+| R3 | Detection keyword di crisi (lista in `persona.yaml` / `crisis_keywords`) → iniezione dei numeri di emergenza nel system prompt dell'LLM con istruzione esplicita di includerli nella risposta, in modo che l'utente riceva un unico messaggio coerente. Fallback hardcoded `crisis_response` se l'LLM fallisce. Rock-bottom tracker con alert agli admin. | Espansione keyword multilingua, procedura formale di follow-up admin su alert. |
+| R4 | Anthropic DPA + Standard Contractual Clauses incorporated by reference nei Commercial Terms accettati al signup. Snapshot della pagina DPA salvato localmente in `private/` (non versionato). Trasferimento dichiarato nell'informativa privacy. | Monitoraggio modifiche DPA, valutazione opzioni provider UE-based. |
 | R5 | Consent prompt richiede dichiarazione 18+. Comunicazione che il bot è destinato a maggiorenni. | _Limite intrinseco dell'auto-dichiarazione. Considerare verifica età solo se rischio si materializza._ |
 | R6 | Nessun dato anagrafico raccolto oltre i metadati Telegram (volontari). | Pseudonimizzazione dei log se condivisi per debug. |
 | R7 | System prompt vincola tono e contenuti. Disclaimer "non sostituisce professionista" nel consenso e nel prompt. Risposte brevi richieste al modello. | Test periodici red-team, review campionaria conversazioni con consenso aggiuntivo. |
 | R8 | DB locale SQLite con journaling WAL. | Backup periodico off-site cifrato (pianificato post-pubblicazione). |
 | R9 | Rate limit burst (5 msg / 10s in-memory). Cap di spesa Anthropic. | Sostained rate limit a livello orario se necessario. |
-| R10 | `/forget` operativo. Esercizio diritti via email titolare documentato in informativa. | Procedura e SLA documentati per richieste via email. |
+| R10 | `/forget` (art. 17) e `/export` (art. 20, ZIP di CSV) operativi self-service. `/ban` admin (art. 6(1)(f) legittimo interesse). Esercizio diritti via email titolare documentato in informativa. | Procedura e SLA documentati per richieste via email; comando `/rectify` se utile. |
 
 ---
 
@@ -131,3 +132,5 @@ Dichiarare:
 | Versione | Data | Autore | Modifiche |
 |---|---|---|---|
 | 1.0 | 2026-05-22 | Matteo Pozzi | Versione iniziale, template da completare. |
+| 1.1 | 2026-05-22 | Matteo Pozzi | R3 aggiornato (numeri di emergenza ora iniettati nel system prompt LLM, single reply). R4 aggiornato (DPA Anthropic incorporated by reference nei Commercial Terms, snapshot in `private/`). R10 aggiornato (`/export` art. 20 e `/ban` operativi). |
+| 1.2 | 2026-05-22 | Matteo Pozzi | Aggiunto Sentry (region EU) come responsabile del trattamento per error monitoring. R2 aggiornato. Informativa privacy aggiornata alla versione 1.1, `CONSENT_VERSION` bumpato a 1.1 (ri-consenso utenti esistenti). |

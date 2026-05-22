@@ -1,6 +1,6 @@
 # Informativa Privacy — met-me / Mac
 
-**Versione:** 1.0
+**Versione:** 1.1
 **Ultimo aggiornamento:** 2026-05-22
 
 Questa informativa descrive come vengono trattati i dati personali degli utenti del bot Telegram **met-me** (di seguito "il bot" o "Mac") ai sensi del **Regolamento UE 2016/679 ("GDPR")** e del **D.lgs. 196/2003 e successive modificazioni ("Codice Privacy" italiano)**.
@@ -57,6 +57,7 @@ I dati possono essere comunicati ai seguenti soggetti, che agiscono come **respo
 |---|---|---|---|
 | **Telegram FZ-LLC** | Piattaforma di messaggistica | Emirati Arabi Uniti / Regno Unito | Privacy policy Telegram ([telegram.org/privacy](https://telegram.org/privacy)) |
 | **Anthropic, PBC** | Provider LLM (Claude) per la generazione delle risposte | Stati Uniti d'America | Data Processing Addendum sottoscritto, Standard Contractual Clauses (SCC) per il trasferimento extra-UE |
+| **Functional Software, Inc. d/b/a Sentry** | Servizio di error monitoring (raccolta automatica di eccezioni e stack trace per diagnostica) | Region EU (Francoforte, Germania) | Data Processing Addendum standard Sentry; nessun trasferimento extra-UE in configurazione attuale. Dati inviati: tipo eccezione, messaggio errore, stack trace, file/riga/funzione, tag ambiente, `request_id` casuale di 12 caratteri esadecimali (pseudonimo non riconducibile all'utente, usato solo per correlazione con i log interni del titolare). NON inviati: ID utente Telegram, username, nome, contenuto messaggi. |
 
 I dati **non sono ceduti, venduti o comunicati a terze parti** al di fuori di quanto sopra elencato e fatti salvi obblighi di legge.
 

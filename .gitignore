@@ -26,6 +26,10 @@ credentials*.json
 service_account*.json
 secrets/
 
+# ---- Private documents (never committed) ----
+# Snapshot legali (DPA, ToS), screenshot, note personali, fatture, ecc.
+private/
+
 # ---- Local data ----
 *.db
 *.db-journal

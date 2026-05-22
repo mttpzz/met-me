@@ -12,7 +12,7 @@
 
 **met-me** is an LLM-powered conversational assistant (Claude or Ollama, hot-swappable) designed to offer a safe and welcoming listening space. Configurable persona, knowledge base via RAG, emotional state tracking (*rock-bottom tracker*) with admin alerts, and on-demand web search via tool calling.
 
-The default bot is called **Mac** — *"Be you. You'll be fine."*
+The bot is called **Mac** — *"Be you. You'll be fine."*
 
 ---
 
@@ -160,6 +160,14 @@ PRIVACY_POLICY_URL=https://github.com/mttpzz/met-me/blob/master/PRIVACY.md
 # In-memory only: bot restart resets all counters.
 RATE_LIMIT_BURST_COUNT=5
 RATE_LIMIT_BURST_WINDOW_SECONDS=10
+
+# ---- Error tracking (Sentry, optional) ----
+# Leave SENTRY_DSN empty to disable Sentry entirely (no SDK init, no data
+# leaves the bot). When enabling, complete the GDPR steps documented in .env
+# before pasting the DSN: declare Sentry as a sub-processor in PRIVACY.md and
+# bump CONSENT_VERSION so existing users re-consent.
+SENTRY_DSN=
+SENTRY_ENVIRONMENT=production
 ```
 
 ### Run
@@ -182,6 +190,8 @@ On the first run the SQLite schema is created, the `rag/docs/` folder is indexed
 | `/help` | Command list |
 | `/reset` | Clear the user's conversation history |
 | `/privacy` | Show what data is stored and how to delete it *(GDPR — right to be informed, art. 13)* |
+| `/export` | Download a ZIP of four CSV files (profile, consents, messages, rock-bottom scores) with the user's data *(GDPR — right to data portability, art. 20)* |
+| `/feedback <message>` | Forward a one-off feedback message to every admin |
 | `/forget` | Permanently delete the user's profile, messages, scores, and log file. Requires confirmation by typing the phrase shown by the bot *(GDPR — right to erasure, art. 17)* |
 
 ### Admin
@@ -193,6 +203,9 @@ On the first run the SQLite schema is created, the `rag/docs/` folder is indexed
 | `/users` | List registered users |
 | `/stats` | Statistics: users, messages per role/model, top users |
 | `/reindex` | Full re-indexing of `rag/docs/` |
+| `/ban <user_id> [reason]` | Block a user from interacting with the bot. Bans survive `/forget` (anti-abuse, legitimate interest art. 6(1)(f) GDPR) |
+| `/unban <user_id>` | Lift a ban |
+| `/bans` | List currently banned users |
 
 **Document upload**: any file sent by an admin in chat is dropped into `rag/docs/` and automatically indexed.
 
@@ -247,6 +260,7 @@ GDPR rights wired into the bot:
 - **Art. 9 — explicit consent for special-category data**: on first interaction (and after any `CONSENT_VERSION` bump) the bot shows the consent prompt with inline accept/decline buttons. No message is processed, stored, or sent to the LLM until consent is recorded. Consent records (user_id, version, granted_at) live in the dedicated `consents` SQLite table.
 - **Art. 13 — right to be informed**: `/privacy` shows a summary; the full policy is at [PRIVACY.md](PRIVACY.md).
 - **Art. 17 — right to erasure**: `/forget` permanently deletes the user profile, messages, scores, consent records, and dedicated log file. The user must confirm by typing back a phrase shown by the bot (configurable in `persona.yaml` as `forget_confirm_phrase`); the pending confirmation expires after `FORGET_CONFIRM_TIMEOUT_SECONDS`. The operation is irreversible.
+- **Art. 20 — right to data portability**: `/export` returns a ZIP containing one CSV per table (profile, consents, messages, rock-bottom scores). UTF-8 with BOM, opens directly in Excel / Google Sheets.
 - **Art. 8 — minors**: the bot is for users 18+. The age confirmation is part of the consent prompt.
 
 The `/reset` command clears only the conversation history and does not constitute full erasure under art. 17.

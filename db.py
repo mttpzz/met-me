@@ -8,6 +8,7 @@ Tables:
   messages           - full conversation log; history is reconstructed from this
   rock_bottom_scores - per-message 0..10 score from the rock-bottom tracker
   consents           - GDPR consent records, one row per (user_id, version)
+  banned_users       - admin-issued bans; survives /forget on purpose
   settings           - key/value store (e.g. active_model)
 """
 
@@ -58,6 +59,18 @@ CREATE TABLE IF NOT EXISTS consents (
     granted_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (user_id, version),
     FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+-- Admin-issued bans. Intentionally NOT removed by delete_user: a banned user
+-- exercising /forget should not also clear their ban, otherwise the ban could
+-- be defeated by simply self-deleting and re-onboarding. The legitimate
+-- interest in keeping the ban (anti-abuse, art. 6(1)(f) GDPR) survives the
+-- erasure of conversational data.
+CREATE TABLE IF NOT EXISTS banned_users (
+    user_id    INTEGER PRIMARY KEY,
+    banned_by  INTEGER NOT NULL,
+    reason     TEXT,
+    banned_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -270,6 +283,114 @@ class Database:
 
     async def record_consent(self, user_id: int, version: str) -> None:
         await self._run(self._record_consent_sync, user_id, version)
+
+    # ---- Data portability (GDPR art. 20) ----------------------------------
+
+    def _export_user_sync(self, user_id: int) -> dict | None:
+        """Return a JSON-serializable snapshot of every row tied to ``user_id``.
+
+        Returns ``None`` if the user has no profile row (and therefore no data).
+        Rows are returned as plain dicts so the caller can ``json.dumps`` them
+        directly; ``sqlite3.Row`` objects are not JSON-serializable.
+        """
+        profile_row = self._get_user_sync(user_id)
+        if profile_row is None:
+            return None
+        consents = self._execute(
+            "SELECT version, granted_at FROM consents WHERE user_id = ? "
+            "ORDER BY granted_at",
+            (user_id,),
+        ).fetchall()
+        messages = self._execute(
+            "SELECT id, role, content, model, created_at FROM messages "
+            "WHERE user_id = ? ORDER BY id",
+            (user_id,),
+        ).fetchall()
+        scores = self._execute(
+            "SELECT id, message_id, score, created_at FROM rock_bottom_scores "
+            "WHERE user_id = ? ORDER BY id",
+            (user_id,),
+        ).fetchall()
+        return {
+            "profile": dict(profile_row),
+            "consents": [dict(r) for r in consents],
+            "messages": [dict(r) for r in messages],
+            "rock_bottom_scores": [dict(r) for r in scores],
+        }
+
+    async def export_user(self, user_id: int) -> dict | None:
+        return await self._run(self._export_user_sync, user_id)
+
+    # ---- Bans (admin anti-abuse) ------------------------------------------
+
+    def _is_banned_sync(self, user_id: int) -> bool:
+        row = self._execute(
+            "SELECT 1 FROM banned_users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        return row is not None
+
+    async def is_banned(self, user_id: int) -> bool:
+        return await self._run(self._is_banned_sync, user_id)
+
+    def _ban_user_sync(self, user_id: int, banned_by: int, reason: str | None) -> None:
+        # ON CONFLICT REPLACE so a re-ban with a new reason / different admin
+        # updates the row instead of erroring out.
+        self._execute(
+            """
+            INSERT INTO banned_users (user_id, banned_by, reason)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                banned_by = excluded.banned_by,
+                reason    = excluded.reason,
+                banned_at = datetime('now')
+            """,
+            (user_id, banned_by, reason),
+        )
+
+    async def ban_user(self, user_id: int, banned_by: int, reason: str | None = None) -> None:
+        await self._run(self._ban_user_sync, user_id, banned_by, reason)
+
+    def _unban_user_sync(self, user_id: int) -> bool:
+        cur = self._execute("DELETE FROM banned_users WHERE user_id = ?", (user_id,))
+        return cur.rowcount > 0
+
+    async def unban_user(self, user_id: int) -> bool:
+        """Return True if the user was banned (and is now unbanned), False if
+        they were not in the banned_users table to begin with."""
+        return await self._run(self._unban_user_sync, user_id)
+
+    def _list_bans_sync(self) -> list[sqlite3.Row]:
+        return list(
+            self._execute(
+                "SELECT user_id, banned_by, reason, banned_at FROM banned_users "
+                "ORDER BY banned_at DESC"
+            )
+        )
+
+    async def list_bans(self) -> list[sqlite3.Row]:
+        return await self._run(self._list_bans_sync)
+
+    # ---- Retention purge (art. 5(1)(c) GDPR) ------------------------------
+
+    def _purge_old_data_sync(self, retention_days: int) -> dict[str, int]:
+        """Delete messages and rock-bottom scores older than ``retention_days``.
+
+        Returns the per-table delete counts. User profiles, consent records,
+        and bans are intentionally kept: minimizing conversation data is
+        what GDPR requires, the rest is needed for ongoing operation and
+        accountability.
+        """
+        cutoff_clause = f"datetime('now', '-{int(retention_days)} days')"
+        scores = self._execute(
+            f"DELETE FROM rock_bottom_scores WHERE created_at < {cutoff_clause}"
+        ).rowcount
+        messages = self._execute(
+            f"DELETE FROM messages WHERE created_at < {cutoff_clause}"
+        ).rowcount
+        return {"messages": messages, "rock_bottom_scores": scores}
+
+    async def purge_old_data(self, retention_days: int) -> dict[str, int]:
+        return await self._run(self._purge_old_data_sync, retention_days)
 
     # ---- Rock-bottom tracker -----------------------------------------------
 
