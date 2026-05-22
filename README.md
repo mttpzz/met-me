@@ -214,24 +214,44 @@ On the first run the SQLite schema is created, the `rag/docs/` folder is indexed
 
 ## 🧠 Customizing the bot
 
-The whole personality lives in [persona.yaml](persona.yaml):
+The whole personality and every user-facing string live in [persona.yaml](persona.yaml):
 
 ```yaml
 name: Mac
 short_description: Be you. You'll be fine.
 welcome: |
   Hi, my name is Mac 👋
+  ...
+
+# UI strings for the consent flow, /forget confirmation, rate-limit notice,
+# crisis response, ban message, /export caption, /feedback replies, etc.
+consent_request: ...
+forget_warning: ...
+crisis_response: ...
+hotlines:
+  - "📞 Telefono Amico Italia — 02 2327 2327 (10:00–24:00)"
+  - "📞 Samaritans Onlus — 800 86 00 22 (13:00–22:00)"
+  - "📞 Telefono Azzurro (under 18) — 19696 (24/7)"
+  - "🚑 Emergenza sanitaria — 112"
+
 help_user:
-  - /start - welcome message
-  - /help - this list
-  - /reset - clear the conversation history
-  - /privacy - what data is stored and how to delete it
-  - /forget - permanently delete all your data
+  - /start - messaggio di benvenuto
+  - /help - questa lista
+  - /reset - cancella la cronologia della conversazione
+  - /privacy - cosa viene salvato e come cancellarlo
+  - /export - scarica una copia dei tuoi dati (CSV)
+  - /feedback - manda un feedback agli amministratori
+  - /forget - cancella permanentemente tutti i tuoi dati
+
 help_admin:
   - /model - show the active model
-  - /model claude|ollama - switch model
+  - /users / /stats / /reindex
+  - /ban / /unban / /bans
+  - /audit
+
+# The Italian system prompt that drives the LLM persona at runtime.
 prompt: |
-  Role: act as an emotional support assistant...
+  Ruolo: ...
 ```
 
 Change name, welcome, and prompt to get an assistant with a completely different tone (coach, tutor, customer support, etc.). On restart the bot automatically syncs its Telegram profile (with dedup to avoid the aggressive rate limits of the profile APIs).
@@ -256,21 +276,23 @@ The bot stores in a local database: Telegram ID, username, first/last name (if s
 
 Because conversations about emotional well-being qualify as **special-category personal data** (GDPR art. 9 — data concerning mental health), the bot enforces explicit, versioned consent. The full privacy policy lives at [PRIVACY.md](PRIVACY.md).
 
-GDPR rights wired into the bot:
+GDPR articles addressed by the implementation:
 
-- **Art. 9 — explicit consent for special-category data**: on first interaction (and after any `CONSENT_VERSION` bump) the bot shows the consent prompt with inline accept/decline buttons. No message is processed, stored, or sent to the LLM until consent is recorded. Consent records (user_id, version, granted_at) live in the dedicated `consents` SQLite table.
+- **Art. 5(1)(c) — data minimization**: a monthly background job purges messages, rock-bottom scores and per-user log lines older than `MESSAGE_RETENTION_DAYS`. The auto-purge runs in a pure-asyncio loop (no APScheduler dependency).
+- **Art. 6(1)(a) — consent** (ordinary lawful basis) and **art. 7 — withdrawal**: granted via inline buttons at first interaction; revocable any time via `/forget`. Consent rows live in the `consents` table keyed by `(user_id, version)`.
+- **Art. 6(1)(f) — legitimate interest**: anti-abuse bans (`/ban`, table `banned_users`) and the admin audit trail (table `admin_audit`) deliberately survive `/forget` on the target user.
+- **Art. 8 — minors**: the bot is restricted to users 18+. Age confirmation is part of the consent prompt.
+- **Art. 9(2)(a) — explicit consent for special-category data**: no message is processed, stored, or sent to the LLM until the user has explicitly accepted under the current `CONSENT_VERSION`. Bumping that env var re-prompts existing users.
 - **Art. 13 — right to be informed**: `/privacy` shows a summary; the full policy is at [PRIVACY.md](PRIVACY.md).
-- **Art. 17 — right to erasure**: `/forget` permanently deletes the user profile, messages, scores, consent records, and dedicated log file. The user must confirm by typing back a phrase shown by the bot (configurable in `persona.yaml` as `forget_confirm_phrase`); the pending confirmation expires after `FORGET_CONFIRM_TIMEOUT_SECONDS`. The operation is irreversible.
-- **Art. 20 — right to data portability**: `/export` returns a ZIP containing one CSV per table (profile, consents, messages, rock-bottom scores). UTF-8 with BOM, opens directly in Excel / Google Sheets.
-- **Art. 8 — minors**: the bot is for users 18+. The age confirmation is part of the consent prompt.
+- **Art. 17 — right to erasure**: `/forget` permanently deletes the user profile, messages, scores, consent records, and dedicated log file. The user must confirm by typing back a phrase shown by the bot (configurable in `persona.yaml` as `forget_confirm_phrase`); the pending confirmation expires after `FORGET_CONFIRM_TIMEOUT_SECONDS`. The operation is irreversible. (`/reset` only clears conversation history and is **not** full erasure under art. 17.)
+- **Art. 20 — right to data portability**: `/export` returns a ZIP containing one UTF-8-with-BOM CSV per table (profile, consents, messages, rock-bottom scores) — opens directly in Excel / Google Sheets.
+- **Art. 24 / 32 — accountability and security of processing**: secrets live in `.env` (gitignored), TLS for all external traffic, in-memory burst rate limiter for anti-flood, optional Sentry error tracking with PII off and pseudonymous `request_id` correlation, and an immutable `admin_audit` table that records every admin command (queryable via `/audit`).
+- **Art. 28 — processors**: external sub-processors (Telegram, Anthropic, optional Sentry) and their respective DPAs are disclosed in [PRIVACY.md](PRIVACY.md) section 5.
+- **Art. 35 — DPIA**: a [Data Protection Impact Assessment](DPIA.md) template lives alongside the policy and should be completed by anyone deploying the bot before going public.
 
-The `/reset` command clears only the conversation history and does not constitute full erasure under art. 17.
+A **safety net for crisis signals** is also built in: a configurable list of Italian keywords (`crisis_keywords` in [persona.yaml](persona.yaml)) is matched against every user message. On match, the emergency-line phone numbers (`hotlines` in [persona.yaml](persona.yaml)) are injected into the LLM system prompt with an explicit instruction so the model produces a single empathetic reply that already contains them. The fixed `crisis_response` text is used only as a fallback when the LLM call itself fails. False positives are accepted as a deliberate trade-off — under-triggering on real crisis signals would be the more dangerous failure mode.
 
-A **safety net for crisis signals** is also built in: a configurable list of Italian keywords (`crisis_keywords` in [persona.yaml](persona.yaml)) is matched against every user message. On match the bot sends a fixed message with emergency-line phone numbers (`crisis_response`) **before** invoking the LLM, so the user always sees actionable help even if the model errors out. False positives are accepted as a deliberate trade-off — under-triggering on real crisis signals would be the more dangerous failure mode.
-
-A [DPIA (Data Protection Impact Assessment)](DPIA.md) template is included alongside the privacy policy and should be completed by anyone deploying the bot before going public.
-
-Adapt the [persona.yaml](persona.yaml) text fields (`privacy`, `consent_request`, `consent_*`, `forget_*`, `crisis_response`, `crisis_keywords`) and the contents of [PRIVACY.md](PRIVACY.md) / [DPIA.md](DPIA.md) to fit your deployment, the data controller, and any additional regulations applicable in your jurisdiction.
+Adapt the [persona.yaml](persona.yaml) text fields (`privacy`, `consent_request`, `consent_*`, `forget_*`, `crisis_response`, `crisis_keywords`, `hotlines`) and the contents of [PRIVACY.md](PRIVACY.md) / [DPIA.md](DPIA.md) to fit your deployment, the data controller, and any additional regulations applicable in your jurisdiction.
 
 ---
 

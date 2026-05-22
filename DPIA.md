@@ -94,7 +94,7 @@ _Compilare le colonne Probabilità / Gravità / Punteggio una volta valutati con
 
 | Rischio | Misure attualmente implementate | Misure da implementare |
 |---|---|---|
-| R1 | DB SQLite su sistema controllato dal titolare. File `.env` e DB non versionati. | Cifratura del DB at-rest, controllo accessi al sistema, audit log accessi. |
+| R1 | DB SQLite su sistema controllato dal titolare. File `.env` e DB non versionati. Audit log delle azioni amministrative (`admin_audit`) operativo. | Cifratura del DB at-rest, controllo accessi al sistema. |
 | R2 | Token in `.env` gitignored. Rotazione token Telegram effettuata. Cap di spesa configurato su Anthropic. Sentry (region EU) attivo per cattura eccezioni e diagnostica. | Vault per i secret in produzione, rotazione periodica, alert su error burst Sentry. |
 | R3 | Detection keyword di crisi (lista in `persona.yaml` / `crisis_keywords`) → iniezione dei numeri di emergenza nel system prompt dell'LLM con istruzione esplicita di includerli nella risposta, in modo che l'utente riceva un unico messaggio coerente. Fallback hardcoded `crisis_response` se l'LLM fallisce. Rock-bottom tracker con alert agli admin. | Espansione keyword multilingua, procedura formale di follow-up admin su alert. |
 | R4 | Anthropic DPA + Standard Contractual Clauses incorporated by reference nei Commercial Terms accettati al signup. Snapshot della pagina DPA salvato localmente in `private/` (non versionato). Trasferimento dichiarato nell'informativa privacy. | Monitoraggio modifiche DPA, valutazione opzioni provider UE-based. |
@@ -134,3 +134,4 @@ Dichiarare:
 | 1.0 | 2026-05-22 | Matteo Pozzi | Versione iniziale, template da completare. |
 | 1.1 | 2026-05-22 | Matteo Pozzi | R3 aggiornato (numeri di emergenza ora iniettati nel system prompt LLM, single reply). R4 aggiornato (DPA Anthropic incorporated by reference nei Commercial Terms, snapshot in `private/`). R10 aggiornato (`/export` art. 20 e `/ban` operativi). |
 | 1.2 | 2026-05-22 | Matteo Pozzi | Aggiunto Sentry (region EU) come responsabile del trattamento per error monitoring. R2 aggiornato. Informativa privacy aggiornata alla versione 1.1, `CONSENT_VERSION` bumpato a 1.1 (ri-consenso utenti esistenti). |
+| 1.3 | 2026-05-22 | Matteo Pozzi | Aggiunto audit log delle azioni amministrative (`admin_audit`, comando `/audit`) come misura di accountability (art. 24/32 GDPR). R1 aggiornato. PRIVACY.md aggiornato alla versione 1.2 (sez. 3 base giuridica art. 6(1)(f) estesa al ban e all'audit log, sez. 7 retention con righe dedicate a ban e audit, sez. 11 misure di sicurezza). `CONSENT_VERSION` bumpato a 1.2 (ri-consenso utenti esistenti per disclosure trattamento `admin_audit`). |

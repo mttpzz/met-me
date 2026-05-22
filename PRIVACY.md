@@ -1,6 +1,6 @@
 # Informativa Privacy — met-me / Mac
 
-**Versione:** 1.1
+**Versione:** 1.2
 **Ultimo aggiornamento:** 2026-05-22
 
 Questa informativa descrive come vengono trattati i dati personali degli utenti del bot Telegram **met-me** (di seguito "il bot" o "Mac") ai sensi del **Regolamento UE 2016/679 ("GDPR")** e del **D.lgs. 196/2003 e successive modificazioni ("Codice Privacy" italiano)**.
@@ -33,7 +33,7 @@ I contenuti delle conversazioni e i punteggi associati **possono includere dati 
 | Finalità | Base giuridica |
 |---|---|
 | Fornire un servizio conversazionale di ascolto e supporto emotivo | Consenso esplicito dell'interessato (**art. 6(1)(a)** e **art. 9(2)(a) GDPR**) |
-| Migliorare la qualità del servizio e prevenire abusi | Legittimo interesse del titolare (**art. 6(1)(f) GDPR**) |
+| Migliorare la qualità del servizio e prevenire abusi (ban di utenti che violano i termini d'uso, registro delle azioni amministrative) | Legittimo interesse del titolare (**art. 6(1)(f) GDPR**) |
 | Adempiere a obblighi di legge (es. richieste di autorità) | Obbligo legale (**art. 6(1)(c) GDPR**) |
 
 Il consenso è raccolto al primo utilizzo del bot tramite un'apposita schermata. Senza consenso il bot non elabora messaggi.
@@ -73,12 +73,14 @@ L'utilizzo del provider Anthropic comporta il trasferimento di dati negli **Stat
 
 | Dato | Periodo di conservazione |
 |---|---|
-| Profilo utente e messaggi | Finché l'account è attivo nel bot |
-| Punteggi di stato emotivo | Finché l'account è attivo nel bot |
-| Log per-utente | Finché l'account è attivo nel bot |
+| Profilo utente e messaggi | Massimo `MESSAGE_RETENTION_DAYS` giorni (default 180), poi purga automatica mensile (art. 5(1)(c) GDPR — minimizzazione) |
+| Punteggi di stato emotivo | Stessa retention di messaggi e log per-utente |
+| Log per-utente | Stessa retention; le righe più vecchie della soglia vengono rimosse, e i file rimasti vuoti cancellati |
 | Record di consenso | 5 anni dalla revoca o cancellazione (come prova ai sensi dell'art. 7 GDPR) |
+| Ban (`banned_users`) | Conservati a tempo indeterminato anche dopo `/forget` dell'utente sanzionato: legittimo interesse del titolare (art. 6(1)(f)) all'efficacia delle misure anti-abuso. Possono essere rimossi su richiesta motivata via email. |
+| Audit log delle azioni amministrative (`admin_audit`) | Conservato a tempo indeterminato per finalità di accountability (art. 24/32 GDPR). Ogni riga registra `admin_id`, azione, eventuale utente bersaglio e timestamp. |
 
-L'utente può richiedere in qualsiasi momento la cancellazione di tutti i propri dati tramite il comando `/forget` all'interno del bot (vedi sezione "Diritti dell'interessato").
+L'utente può richiedere in qualsiasi momento la cancellazione di tutti i dati conversazionali tramite il comando `/forget` all'interno del bot (vedi sezione "Diritti dell'interessato"). Ban e audit log sopravvivono alla cancellazione conversazionale per i motivi sopra indicati.
 
 ---
 
@@ -121,8 +123,10 @@ Il bot **non è un servizio medico, sanitario o psicologico** e **non sostituisc
 
 - Database conservato su sistema controllato dal titolare, accessi ristretti.
 - Token e credenziali API conservati come variabili d'ambiente, mai versionate in repository pubblico.
-- Comunicazione con Telegram e Anthropic via TLS.
-- Limite di frequenza dei messaggi (rate limit) per ridurre rischi di abuso.
+- Comunicazione con Telegram, Anthropic e Sentry via TLS.
+- Limite di frequenza dei messaggi (rate limit burst, in-memory) per ridurre rischi di flooding e DoS economico.
+- **Audit log amministrativo** (`admin_audit`): ogni comando di amministrazione viene registrato con timestamp, identificativo dell'amministratore e parametri pertinenti, per finalità di accountability (art. 24/32 GDPR). Anche la consultazione dell'audit è tracciata.
+- Cancellazione automatica mensile dei dati conversazionali oltre la soglia di retention configurata.
 
 ---
 
