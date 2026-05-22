@@ -100,6 +100,9 @@ class Config:
     sentry_dsn: str
     sentry_environment: str
 
+    # Audit log (admin accountability, art. 24/32 GDPR).
+    admin_audit_limit: int
+
     valid_models: tuple[str, ...] = field(default_factory=lambda: VALID_MODELS)
 
 
@@ -189,4 +192,5 @@ def load() -> Config:
         message_purge_hour=purge_hour,
         sentry_dsn=os.environ["SENTRY_DSN"].strip(),
         sentry_environment=os.environ["SENTRY_ENVIRONMENT"].strip() or "production",
+        admin_audit_limit=int(os.environ["ADMIN_AUDIT_LIMIT"]),
     )

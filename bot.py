@@ -262,6 +262,24 @@ def is_admin(user_id: int) -> bool:
     return user_id in CFG.admin_ids
 
 
+async def _audit(
+    admin_id: int,
+    action: str,
+    target_user_id: int | None = None,
+    details: str | None = None,
+) -> None:
+    """Record an admin action in the audit trail.
+
+    Thin wrapper around ``DB.record_admin_action`` that swallows DB errors —
+    we never want a missed audit row to abort the action the admin asked for.
+    Errors still reach Sentry via ``log.exception``.
+    """
+    try:
+        await DB.record_admin_action(admin_id, action, target_user_id, details)
+    except Exception:
+        log.exception("Failed to record admin audit row: %s by %s", action, admin_id)
+
+
 async def active_model() -> str:
     return await DB.get_setting(ACTIVE_MODEL_KEY, CFG.default_model)
 
@@ -667,8 +685,10 @@ async def cmd_model(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
+    previous = await active_model()
     await DB.set_setting(ACTIVE_MODEL_KEY, choice)
     log.info("admin %s switched model to %s", u.id, choice)
+    await _audit(u.id, "model_switch", details=f"{previous} -> {choice}")
     await update.message.reply_text(f"Model set to: {choice}")
 
 
@@ -690,6 +710,7 @@ async def cmd_users(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     rows = await DB.list_users()
+    await _audit(u.id, "users_list_viewed", details=f"count={len(rows)}")
     if not rows:
         await update.message.reply_text("No users registered yet.")
         return
@@ -715,6 +736,7 @@ async def cmd_reindex(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(f"Reindex failed: {exc}")
         return
     log_event(u.id, f"REINDEX | files={files} nodes={nodes}")
+    await _audit(u.id, "reindex", details=f"files={files} nodes={nodes}")
     await update.message.reply_text(f"Reindexed {files} files, {nodes} chunks.")
 
 
@@ -743,6 +765,7 @@ async def on_document(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await msg.reply_text(f"Indexing failed: {exc}")
         return
     log_event(u.id, f"DOC | uploaded={doc.file_name} | nodes={added}")
+    await _audit(u.id, "document_uploaded", details=f"file={doc.file_name} nodes={added}")
     await msg.reply_text(f"Indexed {added} chunks from {doc.file_name}.")
 
 
@@ -754,6 +777,7 @@ async def cmd_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     s = await DB.get_stats()
+    await _audit(u.id, "stats_viewed")
     lines = [
         "Bot statistics:",
         f"- total users: {s['total_users']}",
@@ -800,6 +824,7 @@ async def cmd_ban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     reason = " ".join(args[1:]).strip() or None
     await DB.ban_user(target, u.id, reason)
     log_event(u.id, f"BAN | target={target} reason={reason!r}")
+    await _audit(u.id, "ban", target_user_id=target, details=reason)
     await update.message.reply_text(
         f"User {target} banned." + (f" Reason: {reason}" if reason else "")
     )
@@ -824,6 +849,7 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     existed = await DB.unban_user(target)
     if existed:
         log_event(u.id, f"UNBAN | target={target}")
+        await _audit(u.id, "unban", target_user_id=target)
         await update.message.reply_text(f"User {target} unbanned.")
     else:
         await update.message.reply_text(f"User {target} was not banned.")
@@ -837,6 +863,7 @@ async def cmd_bans(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Admin-only command.")
         return
     rows = await DB.list_bans()
+    await _audit(u.id, "bans_list_viewed", details=f"count={len(rows)}")
     if not rows:
         await update.message.reply_text("No bans.")
         return
@@ -845,6 +872,36 @@ async def cmd_bans(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         reason = r["reason"] or "-"
         lines.append(
             f"- {r['user_id']} | by={r['banned_by']} | at={r['banned_at']} | {reason}"
+        )
+    text = "\n".join(lines)
+    for chunk in split_for_telegram(text):
+        await update.message.reply_text(chunk)
+
+
+async def cmd_audit(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin: show the most recent rows from the audit trail.
+
+    Tracking the read itself (``audit_viewed``) means anyone with admin access
+    leaves a footprint when they inspect the trail — useful when the team
+    eventually grows beyond a single maintainer.
+    """
+    u = update.effective_user
+    log_cmd(u, "/audit")
+    if not is_admin(u.id):
+        await update.message.reply_text("Admin-only command.")
+        return
+    rows = await DB.list_admin_audit(CFG.admin_audit_limit)
+    await _audit(u.id, "audit_viewed", details=f"limit={CFG.admin_audit_limit}")
+    if not rows:
+        await update.message.reply_text("Audit log is empty.")
+        return
+    lines = [f"Audit log (last {len(rows)} entries, newest first):"]
+    for r in rows:
+        target = r["target_user_id"] if r["target_user_id"] is not None else "-"
+        details = r["details"] if r["details"] else "-"
+        lines.append(
+            f"{r['created_at']} | by={r['admin_id']} | {r['action']} | "
+            f"target={target} | {details}"
         )
     text = "\n".join(lines)
     for chunk in split_for_telegram(text):
@@ -1328,6 +1385,7 @@ def main() -> None:
     app.add_handler(CommandHandler("ban", cmd_ban))
     app.add_handler(CommandHandler("unban", cmd_unban))
     app.add_handler(CommandHandler("bans", cmd_bans))
+    app.add_handler(CommandHandler("audit", cmd_audit))
     app.add_handler(MessageHandler(filters.Document.ALL, on_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     app.add_handler(CallbackQueryHandler(on_consent_callback, pattern=r"^consent:"))

@@ -137,6 +137,7 @@ help_admin:
   - /ban <user_id> [reason] - block a user from interacting with the bot
   - /unban <user_id> - lift a ban
   - /bans - list currently banned users
+  - /audit - show the most recent admin actions
 
 prompt: |
   Ruolo: Agisci come un assistente di supporto emotivo e benessere. Offri uno spazio d'ascolto sicuro, accogliente, privo di giudizio e profondamente umano. Evita di etichettare la conversazione come "psicologica" o "clinica"; parla semplicemente di benessere, ascolto, emozioni.

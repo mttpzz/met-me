@@ -9,6 +9,7 @@ Tables:
   rock_bottom_scores - per-message 0..10 score from the rock-bottom tracker
   consents           - GDPR consent records, one row per (user_id, version)
   banned_users       - admin-issued bans; survives /forget on purpose
+  admin_audit        - trail of admin actions; never purged (accountability)
   settings           - key/value store (e.g. active_model)
 """
 
@@ -72,6 +73,23 @@ CREATE TABLE IF NOT EXISTS banned_users (
     reason     TEXT,
     banned_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Admin accountability trail (art. 24/32 GDPR). Every admin command writes
+-- a row here; rows are kept forever (no retention purge) and survive
+-- /forget on the target user. action is a stable snake_case identifier
+-- (ban, unban, model_switch, users_list_viewed, ...). target_user_id is
+-- nullable for actions that don't apply to a specific user.
+CREATE TABLE IF NOT EXISTS admin_audit (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id        INTEGER NOT NULL,
+    action          TEXT    NOT NULL,
+    target_user_id  INTEGER,
+    details         TEXT,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_audit_admin  ON admin_audit(admin_id, id);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_target ON admin_audit(target_user_id, id);
 
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
@@ -369,6 +387,44 @@ class Database:
 
     async def list_bans(self) -> list[sqlite3.Row]:
         return await self._run(self._list_bans_sync)
+
+    # ---- Admin audit log (art. 24/32 GDPR) --------------------------------
+
+    def _record_admin_action_sync(
+        self,
+        admin_id: int,
+        action: str,
+        target_user_id: int | None,
+        details: str | None,
+    ) -> None:
+        self._execute(
+            "INSERT INTO admin_audit (admin_id, action, target_user_id, details) "
+            "VALUES (?, ?, ?, ?)",
+            (admin_id, action, target_user_id, details),
+        )
+
+    async def record_admin_action(
+        self,
+        admin_id: int,
+        action: str,
+        target_user_id: int | None = None,
+        details: str | None = None,
+    ) -> None:
+        await self._run(
+            self._record_admin_action_sync, admin_id, action, target_user_id, details
+        )
+
+    def _list_admin_audit_sync(self, limit: int) -> list[sqlite3.Row]:
+        return list(
+            self._execute(
+                "SELECT admin_id, action, target_user_id, details, created_at "
+                "FROM admin_audit ORDER BY id DESC LIMIT ?",
+                (limit,),
+            )
+        )
+
+    async def list_admin_audit(self, limit: int) -> list[sqlite3.Row]:
+        return await self._run(self._list_admin_audit_sync, limit)
 
     # ---- Retention purge (art. 5(1)(c) GDPR) ------------------------------
 

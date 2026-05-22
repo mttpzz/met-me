@@ -206,6 +206,7 @@ On the first run the SQLite schema is created, the `rag/docs/` folder is indexed
 | `/ban <user_id> [reason]` | Block a user from interacting with the bot. Bans survive `/forget` (anti-abuse, legitimate interest art. 6(1)(f) GDPR) |
 | `/unban <user_id>` | Lift a ban |
 | `/bans` | List currently banned users |
+| `/audit` | Show the most recent admin actions (accountability — art. 24/32 GDPR). Every admin command writes a row to the `admin_audit` table; reading the log is itself logged. |
 
 **Document upload**: any file sent by an admin in chat is dropped into `rag/docs/` and automatically indexed.
 
