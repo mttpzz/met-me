@@ -16,6 +16,14 @@ The bot is called **Mac** — *"Be you. You'll be fine."*
 
 ---
 
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red)](LICENSE)
+[![Telegram Bot API](https://img.shields.io/badge/telegram--bot-api-blue?logo=telegram)](https://core.telegram.org/bots/api)
+[![Anthropic Claude](https://img.shields.io/badge/anthropic-claude-000?logo=anthropic)](https://anthropic.com)
+[![Ollama](https://img.shields.io/badge/ollama-local%20inference-7d4e33?logo=ollama)](https://ollama.com)
+
+---
+
 ## ✨ Features
 
 - 🤖 **Two LLM providers**: Anthropic Claude (cloud) and Ollama (local), switchable at runtime via `/model`.
@@ -177,6 +185,20 @@ python bot.py
 ```
 
 On the first run the SQLite schema is created, the `rag/docs/` folder is indexed (if it contains files), and the bot's Telegram profile is synced.
+
+---
+
+## 🔧 Troubleshooting
+
+| Problem | Symptom | Fix |
+|---------|---------|-----|
+| Ollama not running | `ConnectionError: Failed to connect to Ollama` in logs | Start Ollama: `ollama serve` in a separate terminal |
+| Invalid `TELEGRAM_TOKEN` | Bot doesn't respond to messages or authentication fails | Verify token from [@BotFather](https://t.me/BotFather), paste into `.env`, restart bot |
+| SQLite locked | `sqlite3.OperationalError: database is locked` | Close any other process accessing `db/met-me.db` (check file explorer / Task Manager) |
+| OOM during RAG indexing | Process killed with no error during `python bot.py` startup | Reduce `RAG_CHUNK_SIZE` in `.env` or split large documents into smaller files |
+| LLM request timeout | `timeout` or `Request timed out` in logs | Increase Ollama memory / reduce model size (for Ollama), or check Anthropic API status (for Claude) |
+| Rate limiter blocking messages | User messages not stored or sent to LLM | User exceeded `RATE_LIMIT_BURST_COUNT` in `RATE_LIMIT_BURST_WINDOW_SECONDS`; wait or adjust thresholds in `.env` |
+| Sentry errors after enabling DSN | Unexpected crashes or data not appearing | Ensure `CONSENT_VERSION` was bumped and privacy policy was updated per GDPR requirements (see `.env` comment) |
 
 ---
 
