@@ -338,4 +338,6 @@ Thanks for the music. 🙏
 
 ## 📄 License
 
-[MIT](LICENSE) © 2026 Matteo Pozzi
+© 2026 Matteo Pozzi. All rights reserved.
+
+This project is **source-available, not open source**: the code is published for viewing purposes only. Use, copying, modification and redistribution are not permitted — see [LICENSE](LICENSE). Contributions are not accepted; bug reports and suggestions are welcome via [Issues](../../issues) and [Discussions](../../discussions) — see [CONTRIBUTING](.github/CONTRIBUTING.md).
