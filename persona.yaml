@@ -119,6 +119,18 @@ crisis_response: |
 
   Resto qui, parlane con me.
 
+# Instruction injected into the LLM system prompt when the user's message
+# trips the crisis keyword filter (see crisis_keywords above). The model is
+# responsible for weaving the numbers into a single empathetic reply so the
+# user gets one coherent message — not two consecutive sends.
+crisis_system_instruction: |
+  SICUREZZA — possibile crisi: nel messaggio dell'utente sono comparsi segnali di potenziale autolesionismo, ideazione suicidaria o disperazione acuta. Nella tua risposta DEVI:
+  1) Validare con calore e brevità (frasi corte, presenza, niente clinico).
+  2) Invitare gentilmente a non restare solo/a con questi pensieri ora.
+  3) Includere ESATTAMENTE questi numeri di emergenza, integrandoli nel testo in modo naturale (puoi usarli come elenco a fine messaggio se aiuta la leggibilità):
+  {hotlines}
+  Non inventare altri numeri, non parafrasarli, non ometterne.
+
 help_user:
   - /start - messaggio di benvenuto
   - /help - questa lista

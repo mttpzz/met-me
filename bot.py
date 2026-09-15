@@ -1025,20 +1025,8 @@ def _build_system_prompt(retrieved: list[str], crisis: bool = False) -> str:
             f"{bullets}"
         )
     if crisis:
-        # When the user's message tripped the crisis keyword filter we add the
-        # emergency numbers and an explicit instruction to the LLM. The model
-        # is responsible for weaving the numbers into a single empathetic reply
-        # so the user gets one coherent message — not two consecutive sends.
         parts.append(
-            "SICUREZZA — possibile crisi: nel messaggio dell'utente sono comparsi segnali "
-            "di potenziale autolesionismo, ideazione suicidaria o disperazione acuta. "
-            "Nella tua risposta DEVI:\n"
-            "1) Validare con calore e brevità (frasi corte, presenza, niente clinico).\n"
-            "2) Invitare gentilmente a non restare solo/a con questi pensieri ora.\n"
-            "3) Includere ESATTAMENTE questi numeri di emergenza, integrandoli nel testo in modo "
-            "naturale (puoi usarli come elenco a fine messaggio se aiuta la leggibilità):\n"
-            f"{_format_hotlines()}\n"
-            "Non inventare altri numeri, non parafrasarli, non ometterne."
+            PERSONA.crisis_system_instruction.format(hotlines=_format_hotlines())
         )
     return "\n\n".join(parts)
 

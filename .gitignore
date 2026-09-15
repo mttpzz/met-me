@@ -4,6 +4,9 @@ TODO
 # ---- RAG index (auto-built first run) ----
 rag/index/
 
+# ---- RAG source documents (copyrighted third-party PDFs, see rag/docs/SOURCES.md) ----
+rag/docs/*.pdf
+
 # ---- RAG / vector stores ----
 chroma/
 .chroma/

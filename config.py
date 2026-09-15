@@ -47,6 +47,7 @@ class Persona:
     crisis_keywords: tuple[str, ...]
     hotlines: tuple[str, ...]
     crisis_response: str
+    crisis_system_instruction: str
     help_user: tuple[str, ...]
     help_admin: tuple[str, ...]
     prompt: str
@@ -136,6 +137,7 @@ def _load_persona(path: Path) -> Persona:
         crisis_keywords=tuple(k.lower() for k in data["crisis_keywords"]),
         hotlines=tuple(data["hotlines"]),
         crisis_response=data["crisis_response"].rstrip("\n"),
+        crisis_system_instruction=data["crisis_system_instruction"].rstrip("\n"),
         help_user=tuple(data["help_user"]),
         help_admin=tuple(data["help_admin"]),
         prompt=data["prompt"],

@@ -75,18 +75,16 @@ Il consenso è raccolto al primo utilizzo tramite tastiera inline Telegram (acce
 
 | # | Rischio | Probabilità | Gravità | Punteggio |
 |---|---|---|---|---|
-| R1 | Accesso non autorizzato al DB locale (contenuti sensibili esposti) | _da valutare_ | Alta | _da valutare_ |
-| R2 | Compromissione delle credenziali API (Telegram token, Anthropic key) | _da valutare_ | Media | _da valutare_ |
-| R3 | Inadeguatezza della risposta del bot in situazione di crisi acuta (utente in pericolo) | Bassa-media | Alta | _da valutare_ |
-| R4 | Trasferimento dati extra-UE (Anthropic) verso giurisdizione con livello di tutela differente | Certa | Media | _da valutare_ |
-| R5 | Utenti minorenni che bypassano il check 18+ (auto-dichiarato) | Media | Alta | _da valutare_ |
-| R6 | Re-identificazione utente dal contenuto delle conversazioni in caso di leak | Bassa | Alta | _da valutare_ |
-| R7 | Risposte LLM allucinatorie/dannose (suggerimenti pericolosi) | Bassa-media | Alta | _da valutare_ |
-| R8 | Perdita o corruzione del DB → indisponibilità servizio | Media | Bassa | _da valutare_ |
-| R9 | Spam/abuso a fini di esfiltrazione costi (DoS economico) | Bassa | Bassa | _da valutare_ |
-| R10 | Inadempimento richieste di esercizio diritti (es. portabilità) | Bassa | Media | _da valutare_ |
-
-_Compilare le colonne Probabilità / Gravità / Punteggio una volta valutati concretamente nel proprio contesto operativo._
+| R1 | Accesso non autorizzato al DB locale (contenuti sensibili esposti) | Bassa-media | Alta | **Alto** |
+| R2 | Compromissione delle credenziali API (Telegram token, Anthropic key) | Bassa | Media | **Medio** |
+| R3 | Inadeguatezza della risposta del bot in situazione di crisi acuta (utente in pericolo) | Bassa-media | Alta | **Medio-alto** |
+| R4 | Trasferimento dati extra-UE (Anthropic) verso giurisdizione con livello di tutela differente | Certa | Media | **Medio** |
+| R5 | Utenti minorenni che bypassano il check 18+ (auto-dichiarato) | Media | Alta | **Alto** |
+| R6 | Re-identificazione utente dal contenuto delle conversazioni in caso di leak | Bassa | Alta | **Medio** |
+| R7 | Risposte LLM allucinatorie/dannose (suggerimenti pericolosi) | Bassa-media | Alta | **Medio-alto** |
+| R8 | Perdita o corruzione del DB → indisponibilità servizio | Media | Bassa | **Basso** |
+| R9 | Spam/abuso a fini di esfiltrazione costi (DoS economico) | Bassa | Bassa | **Basso** |
+| R10 | Inadempimento richieste di esercizio diritti (es. portabilità) | Bassa | Media | **Basso-medio** |
 
 ---
 
@@ -117,13 +115,16 @@ _Compilare le colonne Probabilità / Gravità / Punteggio una volta valutati con
 
 ## 6. Conclusioni
 
-_Da completare al termine della valutazione dei rischi (sezione 3) e delle misure (sezione 4)._
+**Il trattamento può procedere alle attuali condizioni** per la fase di beta privata. I rischi a punteggio Alto (R1, R5) hanno mitigazioni parziali già attive (DB non versionato, audit log, consent 18+) e per R5 il limite è intrinseco all'auto-dichiarazione dell'età: non richiedono la sospensione del servizio, ma restano prioritari.
 
-Dichiarare:
+**Misure aggiuntive prerequisito al lancio pubblico:**
 
-- se il trattamento può procedere alle attuali condizioni (rischio residuo accettabile),
-- quali misure aggiuntive sono prerequisito al lancio pubblico,
-- prossima data di revisione del documento.
+- Cifratura del DB SQLite at-rest (R1).
+- Backup periodico off-site cifrato (R8, già pianificato in sezione 4).
+- Espansione multilingua delle keyword di crisi e procedura formale di follow-up admin sugli alert rock-bottom (R3).
+- Monitoraggio periodico di eventuali modifiche al DPA/SCC di Anthropic (R4).
+
+**Prossima data di revisione:** entro 6 mesi da questa versione (2026-11-22), o immediatamente in caso di modifica sostanziale al trattamento (nuovo sub-responsabile, nuova categoria di dati trattati, cambio di scala) — cadenza più ravvicinata dei 12 mesi indicati in Premessa data la fase di pre-lancio pubblico.
 
 ---
 

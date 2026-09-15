@@ -169,6 +169,15 @@ PRIVACY_POLICY_URL=https://github.com/mttpzz/met-me/blob/master/PRIVACY.md
 RATE_LIMIT_BURST_COUNT=5
 RATE_LIMIT_BURST_WINDOW_SECONDS=10
 
+# ---- Data retention (GDPR art. 5(1)(c) — data minimization) ----
+# Messages, rock-bottom scores and per-user log lines older than this are
+# purged by a monthly background job.
+MESSAGE_RETENTION_DAYS=180
+# Day of month (1-28, capped to avoid short-month issues) the purge job runs.
+MESSAGE_PURGE_DAY=1
+# Hour of day (0-23, local time) the purge job runs.
+MESSAGE_PURGE_HOUR=3
+
 # ---- Error tracking (Sentry, optional) ----
 # Leave SENTRY_DSN empty to disable Sentry entirely (no SDK init, no data
 # leaves the bot). When enabling, complete the GDPR steps documented in .env
@@ -176,6 +185,10 @@ RATE_LIMIT_BURST_WINDOW_SECONDS=10
 # bump CONSENT_VERSION so existing users re-consent.
 SENTRY_DSN=
 SENTRY_ENVIRONMENT=production
+
+# ---- Admin audit log (GDPR art. 24/32 accountability) ----
+# Max number of audit-log entries returned by the admin audit command.
+ADMIN_AUDIT_LIMIT=50
 ```
 
 ### Run
